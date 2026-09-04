@@ -1,4 +1,4 @@
-import { getSessionUser, requireAdmin, json } from "../../_lib/auth.js";
+import { getSessionUser, requireAdmin, hashPassword, randomTempPassword, json } from "../../_lib/auth.js";
 import { ASSIGNABLE_ROLES } from "../../_lib/roles.js";
 
 export async function onRequestPatch({ request, env, params }) {
@@ -7,7 +7,20 @@ export async function onRequestPatch({ request, env, params }) {
 
   const targetId = params.id;
   const body = await request.json().catch(() => ({}));
-  const { role, status, template_admin } = body;
+  const { role, status, template_admin, resetPassword } = body;
+
+  if (resetPassword) {
+    const target = await env.DB.prepare("SELECT id, name, email FROM users WHERE id = ?").bind(targetId).first();
+    if (!target) return json({ error: "User not found." }, { status: 404 });
+
+    const tempPassword = randomTempPassword();
+    const passwordHash = await hashPassword(tempPassword);
+    await env.DB.prepare("UPDATE users SET password_hash = ? WHERE id = ?").bind(passwordHash, targetId).run();
+    // Force re-login everywhere so the old password can't keep an existing session alive.
+    await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(targetId).run();
+
+    return json({ id: target.id, name: target.name, email: target.email, tempPassword });
+  }
 
   if (role !== undefined && !ASSIGNABLE_ROLES.includes(role)) {
     return json({ error: `Unknown role: ${role}` }, { status: 400 });
