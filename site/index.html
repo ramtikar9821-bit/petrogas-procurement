@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Petrogas Procurement &amp; Contract Governance</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <div class="page-header">
+    <h1>Dashboard</h1>
+    <p>Overview across all five modules. Click a card to open the module.</p>
+  </div>
+
+  <div class="note-banner">Module data below is a prototype (JSON seed data + browser-local additions) — logins and roles are real, via Cloudflare Pages Functions + D1.</div>
+
+  <div class="grid-cards" id="statCards"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0;font-size:16px;color:var(--navy);">Roles &amp; Permissions</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin-top:-6px;">Your role is assigned by an Admin — everyone can view all modules; only the listed roles can add new records in each one.</p>
+    <table id="roleTable">
+      <thead><tr><th>Role</th><th>Primary Responsibility</th><th>Can Add Records In</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;font-size:16px;color:var(--navy);">Contracts Expiring Soon (≤ 90 days)</h2>
+    <table id="expiringTable">
+      <thead><tr><th>Contract</th><th>Vendor</th><th>End Date</th><th>Days Left</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+const MODULE_LABELS = {
+  tenders: "Tender Evaluation",
+  clarifications: "Clarification",
+  exceptions: "Exception & Clause Register",
+  contracts: "Contract Lifecycle",
+  templates: "Templates"
+};
+
+function renderRoleTable() {
+  const current = PGP.getRole();
+  const rows = PGP.ROLES.map(role => {
+    const modules = Object.keys(MODULE_LABELS).filter(m => PGP.PERMISSIONS[m]?.includes(role));
+    const modulesLabel = modules.length ? modules.map(m => MODULE_LABELS[m]).join(", ") : "—";
+    return `<tr style="${role === current ? 'background:#e2f5f3;' : ''}">
+      <td><strong>${PGP.escapeHtml(role)}</strong>${role === current ? ' <span class="badge teal">You</span>' : ''}</td>
+      <td>${PGP.escapeHtml(PGP.ROLE_INFO[role])}</td>
+      <td>${PGP.escapeHtml(modulesLabel)}</td>
+    </tr>`;
+  }).join("");
+  document.querySelector("#roleTable tbody").innerHTML = rows;
+}
+
+async function init() {
+  renderRoleTable();
+  await PGP.initConfig();
+  const [tenders, clarifications, exceptions, contracts, templates, vendors] = await Promise.all([
+    PGP.loadFullList("data/tenders.json", "pgp_tenders_full"),
+    PGP.loadFullList("data/clarifications.json", "pgp_clarifications_full"),
+    PGP.loadFullList("data/exceptions.json", "pgp_exceptions_full"),
+    PGP.apiList("contracts"),
+    PGP.apiList("templates"),
+    PGP.loadVendors(),
+  ]);
+
+  const openClarifications = clarifications.filter(c => c.status !== "Closed").length;
+  const overdueClarifications = clarifications.filter(c =>
+    c.responseDueDate && c.status !== "Answered" && c.status !== "Closed" && PGP.daysUntil(c.responseDueDate) < 0
+  ).length;
+  const pendingExceptions = exceptions.filter(e => e.approval_status === "Pending").length;
+  const expiringContracts = contracts.filter(c => PGP.contractStatus(c.endDate).label === "Expiring Soon").length;
+  const expiredContracts = contracts.filter(c => PGP.contractStatus(c.endDate).label === "Expired").length;
+  const activeTemplates = templates.filter(t => t.status === "Active").length;
+  const validityRegister = PGP.computeSupplierValidityRegister(tenders, vendors, PGP.getValidityConfig());
+  const expiredAssessments = validityRegister.filter(e => e.status === "Expired").length;
+
+  const cards = [
+    { href: "tender-evaluation.html", label: "Tenders in Evaluation", value: tenders.filter(t => t.status !== "Awarded").length, sub: `${tenders.length} total tenders` },
+    { href: "scope-clarification.html", label: "Open Clarifications", value: openClarifications, sub: `${overdueClarifications} overdue (SLA breach)` },
+    { href: "exceptions.html", label: "Pending Exceptions", value: pendingExceptions, sub: `${exceptions.length} total in register` },
+    { href: "contracts.html", label: "Contracts Expiring Soon", value: expiringContracts, sub: `${expiredContracts} already expired` },
+    { href: "supplier-validity.html", label: "Expired Assessments", value: expiredAssessments, sub: `${validityRegister.length} finalized QHSE/Financial on record` },
+    { href: "templates.html", label: "Active Templates", value: activeTemplates, sub: `${templates.length} total versions on file` },
+  ];
+
+  document.getElementById("statCards").innerHTML = cards.map(c => `
+    <a class="stat-card" href="${c.href}">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+      <div class="sub">${c.sub}</div>
+    </a>
+  `).join("");
+
+  const expiringRows = contracts
+    .map(c => ({ ...c, days: PGP.daysUntil(c.endDate) }))
+    .filter(c => c.days <= 90)
+    .sort((a, b) => a.days - b.days);
+
+  const tbody = document.querySelector("#expiringTable tbody");
+  if (expiringRows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No contracts expiring within 90 days.</td></tr>`;
+  } else {
+    tbody.innerHTML = expiringRows.map(c => {
+      const st = PGP.contractStatus(c.endDate);
+      return `<tr>
+        <td>${PGP.escapeHtml(c.title)}</td>
+        <td>${PGP.escapeHtml(c.vendor)}</td>
+        <td>${PGP.formatDate(c.endDate)}</td>
+        <td>${c.days}</td>
+        <td><span class="badge ${st.cls}">${st.label}</span></td>
+      </tr>`;
+    }).join("");
+  }
+}
+PGP.initAuth().then(() => {
+  PGP.renderChrome("index.html");
+  init();
+});
+</script>
+</body>
+</html>

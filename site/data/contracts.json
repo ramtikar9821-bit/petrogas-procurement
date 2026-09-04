@@ -1,0 +1,83 @@
+[
+  {
+    "id": "CTR-2201",
+    "title": "Drilling Consumables Supply Agreement",
+    "vendor": "Alpha Oilfield Services",
+    "vendor_id": "VEN-001",
+    "category": "Drilling & Wellsite",
+    "value": 1250000,
+    "currency": "USD",
+    "startDate": "2024-09-01",
+    "endDate": "2026-09-01",
+    "owner": "A. Rahman",
+    "criticality": "High",
+    "renewals": [],
+    "amendments": []
+  },
+  {
+    "id": "CTR-2145",
+    "title": "IT Managed Services - Field Offices",
+    "vendor": "NextGen IT Solutions",
+    "vendor_id": "VEN-004",
+    "category": "IT & Telecom",
+    "value": 480000,
+    "currency": "USD",
+    "startDate": "2025-01-15",
+    "endDate": "2026-10-15",
+    "owner": "T. Yusuf",
+    "criticality": "Medium",
+    "renewals": [
+      { "decision": "Renew", "new_end_date": "2026-10-15", "approved_by": "Contract Owner - T. Yusuf", "approval_date": "2026-03-01" }
+    ],
+    "amendments": [
+      { "amendment_type": "term_extension", "old_value": "2026-04-15", "new_value": "2026-10-15", "changed_by": "T. Yusuf", "changed_at": "2026-03-01" }
+    ]
+  },
+  {
+    "id": "CTR-1998",
+    "title": "Pipeline Inspection Services",
+    "vendor": "Falcon Tech",
+    "vendor_id": "VEN-005",
+    "category": "Maintenance",
+    "value": 900000,
+    "currency": "USD",
+    "startDate": "2023-06-01",
+    "endDate": "2026-08-30",
+    "owner": "R. Nair",
+    "criticality": "High",
+    "renewals": [],
+    "amendments": []
+  },
+  {
+    "id": "CTR-1877",
+    "title": "Office Facilities Cleaning Services",
+    "vendor": "CleanCo Facilities",
+    "vendor_id": "VEN-006",
+    "category": "Facilities",
+    "value": 60000,
+    "currency": "USD",
+    "startDate": "2022-04-01",
+    "endDate": "2026-04-01",
+    "owner": "S. Kumar",
+    "criticality": "Low",
+    "renewals": [
+      { "decision": "Do Not Renew", "new_end_date": "", "approved_by": "Contract Owner - S. Kumar", "approval_date": "2026-03-01" }
+    ],
+    "amendments": []
+  },
+  {
+    "id": "CTR-2310",
+    "title": "Framework Agreement - Safety Equipment Supply",
+    "vendor": "Gamma Industrial",
+    "vendor_id": "VEN-003",
+    "category": "HSE",
+    "value": 2100000,
+    "currency": "USD",
+    "startDate": "2025-03-01",
+    "endDate": "2027-03-01",
+    "owner": "F. Al-Sayed",
+    "criticality": "High",
+    "renewals": [],
+    "amendments": []
+  }
+]

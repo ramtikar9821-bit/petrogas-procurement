@@ -1,0 +1,8 @@
+[
+  { "vendor_id": "VEN-001", "cr_number": "1023456", "vendor_name": "Alpha Oilfield Services" },
+  { "vendor_id": "VEN-002", "cr_number": "1044821", "vendor_name": "Beta Supply Co." },
+  { "vendor_id": "VEN-003", "cr_number": "1067213", "vendor_name": "Gamma Industrial" },
+  { "vendor_id": "VEN-004", "cr_number": "1098765", "vendor_name": "NextGen IT Solutions" },
+  { "vendor_id": "VEN-005", "cr_number": "1112233", "vendor_name": "Falcon Tech" },
+  { "vendor_id": "VEN-006", "cr_number": "1145599", "vendor_name": "CleanCo Facilities" }
+]

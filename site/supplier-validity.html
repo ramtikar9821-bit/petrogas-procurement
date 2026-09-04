@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supplier Validity — Petrogas Procurement</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <div class="page-header">
+    <h1>Supplier Validity Register</h1>
+    <p>Every vendor's finalized QHSE and Financial assessments, with the validity window they're reusable within — shares the same reminder cadence as Contract expiry (buildspec Section 6.2).</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;font-size:15px;color:var(--navy);">Validity &amp; Reminder Configuration</h2>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:-6px;">Durations are placeholders (12 months) pending Procurement/QHSE sign-off on the real figures — see buildspec Section 9 open items.</p>
+    <div id="configView"></div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="Search vendor or CR number...">
+  </div>
+
+  <div class="card">
+    <table id="registerTable">
+      <thead>
+        <tr><th>Vendor</th><th>CR Number</th><th>Assessment</th><th>Source Tender</th><th>Finalized</th><th>Valid Until</th><th>Status</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+let TENDERS = [];
+let VENDORS = [];
+let REGISTER = [];
+
+function statusBadge(entry) {
+  if (entry.status === "Expired") return `<span class="badge red">Expired</span>`;
+  const soon = Math.max(...PGP.getValidityConfig().reminder_days_before);
+  if (entry.days_left <= soon) return `<span class="badge amber">Valid · expiring in ${entry.days_left}d</span>`;
+  return `<span class="badge green">Valid</span>`;
+}
+
+function renderTable(items) {
+  const tbody = document.querySelector("#registerTable tbody");
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No finalized QHSE/Financial assessments yet — finalize one from a bidder's evaluation tab in Tender Evaluation.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map(e => `
+    <tr>
+      <td>${PGP.escapeHtml(e.vendor_name)}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${PGP.escapeHtml(e.cr_number)}</td>
+      <td><span class="badge gray">${e.assessment_type}</span></td>
+      <td>${PGP.escapeHtml(e.source_tender_number)}</td>
+      <td>${PGP.formatDate(e.finalized_at)}</td>
+      <td>${PGP.formatDate(e.validity_end_date)}</td>
+      <td>${statusBadge(e)}</td>
+    </tr>
+  `).join("");
+}
+
+function applySearch() {
+  const q = document.getElementById("searchBox").value.toLowerCase();
+  renderTable(REGISTER.filter(e =>
+    e.vendor_name.toLowerCase().includes(q) || e.cr_number.toLowerCase().includes(q)
+  ));
+}
+
+function renderConfig() {
+  const cfg = PGP.getValidityConfig();
+  const canEdit = PGP.hasPermission("supplierValidityConfig");
+  const el = document.getElementById("configView");
+  if (canEdit) {
+    el.innerHTML = `
+      <div class="add-row">
+        <div class="form-row"><label>QHSE validity (months)</label><input type="number" min="1" id="cfgQhseMonths" value="${cfg.qhse_validity_months}"></div>
+        <div class="form-row"><label>Financial validity (months)</label><input type="number" min="1" id="cfgFinMonths" value="${cfg.financial_validity_months}"></div>
+        <div class="form-row"><label>Reminder days before (comma-separated)</label><input type="text" id="cfgReminders" value="${cfg.reminder_days_before.join(', ')}"></div>
+        <button type="button" onclick="saveConfig()">Save</button>
+      </div>
+    `;
+  } else {
+    el.innerHTML = `<div class="note-banner" style="margin:0;">QHSE validity: <strong>${cfg.qhse_validity_months} months</strong> · Financial validity: <strong>${cfg.financial_validity_months} months</strong> · Reminders at: <strong>${cfg.reminder_days_before.join(', ')} days</strong> before expiry. Only ${PGP.PERMISSIONS.supplierValidityConfig.join(", ")} can edit this. Logged in as ${PGP.getRole()}.</div>`;
+  }
+}
+
+async function saveConfig() {
+  const qhseMonths = Math.max(1, parseInt(document.getElementById("cfgQhseMonths").value, 10) || 12);
+  const finMonths = Math.max(1, parseInt(document.getElementById("cfgFinMonths").value, 10) || 12);
+  const reminders = document.getElementById("cfgReminders").value
+    .split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0).sort((a, b) => b - a);
+  try {
+    await PGP.setValidityConfig({
+      qhse_validity_months: qhseMonths,
+      financial_validity_months: finMonths,
+      reminder_days_before: reminders.length ? reminders : [90, 60, 30]
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  refreshRegister();
+  renderConfig();
+}
+
+function refreshRegister() {
+  REGISTER = PGP.computeSupplierValidityRegister(TENDERS, VENDORS, PGP.getValidityConfig());
+  applySearch();
+}
+
+async function init() {
+  await PGP.initConfig();
+  const [tendersData, vendorsData] = await Promise.all([
+    PGP.loadFullList("data/tenders.json", "pgp_tenders_full"),
+    PGP.loadVendors()
+  ]);
+  TENDERS = tendersData;
+  VENDORS = vendorsData;
+  renderConfig();
+  refreshRegister();
+
+  document.getElementById("searchBox").addEventListener("input", applySearch);
+}
+PGP.initAuth().then(() => {
+  PGP.renderChrome("supplier-validity.html");
+  init();
+});
+</script>
+</body>
+</html>

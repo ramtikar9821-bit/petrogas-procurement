@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Standard Templates — Petrogas Procurement</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .history-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; background: #fafbfd; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.3px; }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="page-header">
+    <h1>Standard Templates Storage</h1>
+    <p>Centralized, version-controlled repository keyed by document number. Only the latest revision of each document is Active; prior revisions are archived and retrievable.</p>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="Search template name, category, or document number...">
+    <button id="addBtn" onclick="PGP.openModal('addModal')">+ Upload New Revision</button>
+  </div>
+
+  <div class="card">
+    <table id="tplTable">
+      <thead>
+        <tr><th>Template</th><th>Doc Number</th><th>Category</th><th>Revision</th><th>Status</th><th>Owner</th><th>Revised</th><th>Used In</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="modal-backdrop" id="addModal">
+  <div class="modal">
+    <h2>Upload New Revision</h2>
+    <form id="addForm">
+      <div class="form-row"><label>Template Name</label><input type="text" name="name" required></div>
+      <div class="form-row"><label>Document Number</label><input type="text" name="documentNumber" placeholder="e.g. PGR-PRC-RFP-01" required></div>
+      <div class="form-row">
+        <label>Category</label>
+        <select name="category">
+          <option>RFP</option><option>RFQ</option><option>Contract</option><option>NDA</option><option>PO Terms</option><option>QHSE Questionnaire</option><option>Evaluation Matrix</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Revision</label><input type="text" name="revision" placeholder="e.g. Revision-3" required></div>
+      <div class="form-row"><label>Owner</label><input type="text" name="owner" placeholder="e.g. Legal / Contracts" required></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="PGP.closeModal('addModal')">Cancel</button>
+        <button type="submit">Publish as Active</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Usage log detail -->
+<div class="modal-backdrop" id="detailModal">
+  <div class="modal" style="width:520px;">
+    <h2 id="detailTitle"></h2>
+    <div id="detailBody"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="PGP.closeModal('detailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+let ALL = [];
+let currentId = null;
+
+function statusBadge(s) {
+  const map = { "Active": "green", "Archived": "gray" };
+  return `<span class="badge ${map[s] || 'gray'}">${s}</span>`;
+}
+
+function findItem(id) { return ALL.find(t => t.id === id); }
+
+function renderTable(items) {
+  const tbody = document.querySelector("#tplTable tbody");
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No templates match your search.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map(t => `
+    <tr>
+      <td>${PGP.escapeHtml(t.name)}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${PGP.escapeHtml(t.documentNumber)}</td>
+      <td>${PGP.escapeHtml(t.category)}</td>
+      <td>${PGP.escapeHtml(t.revision)}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td>${PGP.escapeHtml(t.owner)}</td>
+      <td>${PGP.formatDate(t.revisionDate)}</td>
+      <td>${t.usageLog.length}</td>
+      <td><button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${t.id}')">Usage Log</button></td>
+    </tr>
+  `).join("");
+}
+
+function openDetail(id) {
+  currentId = id;
+  renderDetail();
+  PGP.openModal("detailModal");
+}
+
+function renderDetail() {
+  const t = findItem(currentId);
+  if (!t) return;
+  const canLog = PGP.hasPermission("templates") || true; // logging usage is a byproduct of using the template, open to all staff
+
+  document.getElementById("detailTitle").textContent = `${t.name} — ${t.revision}`;
+  let html = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+      Document number <strong style="color:var(--text);">${PGP.escapeHtml(t.documentNumber)}</strong> ·
+      ${statusBadge(t.status)} · uploaded by ${PGP.escapeHtml(t.uploadedBy || "—")}
+    </div>
+    <div class="section-title">Usage Log</div>
+  `;
+  html += t.usageLog.length === 0
+    ? `<div class="empty-state" style="padding:10px;">Not used in any tender/contract yet.</div>`
+    : t.usageLog.map(u => `<div class="history-item">${PGP.escapeHtml(u.used_in_ref)} · ${PGP.formatDate(u.used_at)}</div>`).join("");
+
+  html += `
+    <div class="add-row" style="display:flex;gap:8px;align-items:flex-end;margin-top:10px;">
+      <div class="form-row" style="flex:1;margin-bottom:0;"><label>Log usage against a tender/contract</label><input type="text" id="usageRef" placeholder="e.g. TND-2026-003"></div>
+      <button type="button" onclick="logUsage()">+ Log Usage</button>
+    </div>
+  `;
+
+  document.getElementById("detailBody").innerHTML = html;
+}
+
+async function logUsage() {
+  const ref = document.getElementById("usageRef").value.trim();
+  if (!ref) { alert("Enter a tender or contract reference."); return; }
+  let updated;
+  try {
+    updated = await PGP.apiUpdate("templates", currentId, { used_in_ref: ref });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  const idx = ALL.findIndex(t => t.id === currentId);
+  if (idx !== -1) ALL[idx] = updated;
+  renderDetail();
+  applySearch();
+}
+
+function applySearch() {
+  const q = document.getElementById("searchBox").value.toLowerCase();
+  renderTable(ALL.filter(t =>
+    t.name.toLowerCase().includes(q) ||
+    t.category.toLowerCase().includes(q) ||
+    t.documentNumber.toLowerCase().includes(q)
+  ));
+}
+
+async function init() {
+  PGP.guardAddButton("templates", document.getElementById("addBtn"));
+  ALL = await PGP.apiList("templates");
+  renderTable(ALL);
+
+  document.getElementById("searchBox").addEventListener("input", applySearch);
+
+  document.getElementById("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const record = {
+      name: fd.get("name"),
+      document_number: fd.get("documentNumber"),
+      category: fd.get("category"),
+      revision: fd.get("revision"),
+      owner: fd.get("owner")
+    };
+    try {
+      // The server archives any existing Active revision of the same
+      // document_number as part of this same write — refetch the list so
+      // that archived row's status shows correctly too, not just the new one.
+      await PGP.apiCreate("templates", record);
+      ALL = await PGP.apiList("templates");
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    applySearch();
+    PGP.closeModal("addModal");
+    e.target.reset();
+  });
+}
+PGP.initAuth().then(() => {
+  PGP.renderChrome("templates.html");
+  init();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+[
+  {
+    "tender_number": "TND-2026-001",
+    "tender_title": "Supply of Drilling Consumables - Annual Contract",
+    "issuance_date": "2026-07-01",
+    "bid_closing_date": "2026-08-01",
+    "category": "Drilling & Wellsite",
+    "status": "Evaluation In Progress",
+    "approvalStatus": "Pending DOA Approval",
+    "financialThreshold": { "min_current_ratio": 1.0, "max_debt_to_equity": 2.0, "min_net_profit_margin_pct": 0 },
+    "criteria": [
+      { "criterion_id": "2026001-C1", "criteria_type": "Essential", "sequence_no": "1", "requirement_description": "Valid trade license for oilfield services", "end_user_notes": "" },
+      { "criterion_id": "2026001-C2", "criteria_type": "Essential", "sequence_no": "2", "requirement_description": "ISO 9001:2015 certification", "end_user_notes": "" },
+      { "criterion_id": "2026001-C3", "criteria_type": "Essential", "sequence_no": "3", "requirement_description": "No conflict of interest declaration", "end_user_notes": "" },
+      { "criterion_id": "2026001-C4", "criteria_type": "General", "sequence_no": "4", "requirement_description": "Local warehousing capability", "end_user_notes": "" },
+      { "criterion_id": "2026001-C5", "criteria_type": "General", "sequence_no": "5", "requirement_description": "24/7 emergency response capability", "end_user_notes": "" },
+      { "criterion_id": "2026001-C6", "criteria_type": "General", "sequence_no": "6", "requirement_description": "Minimum 5 years relevant experience", "end_user_notes": "" }
+    ],
+    "bidders": [
+      {
+        "bidder_id": "2026001-B1",
+        "name": "Alpha Oilfield Services",
+        "vendor_id": "VEN-001",
+        "complianceResponses": { "2026001-C1": "Comply", "2026001-C2": "Comply", "2026001-C3": "Comply", "2026001-C4": "Comply", "2026001-C5": "Comply", "2026001-C6": "Comply" },
+        "qhse": {
+          "contractor_name": "Alpha Oilfield Services LLC",
+          "contractor_address": "Plot 14, Rusayl Industrial Estate, Muscat",
+          "contract_title": "Supply of Drilling Consumables - Annual Contract",
+          "contractor_representative": "K. Al-Balushi",
+          "submission_date": "2026-07-20",
+          "ratings": {
+            "1.1": 3, "1.2": 3, "1.3": 4,
+            "2.1": 3, "2.2": 3, "2.3": 4,
+            "3.1": 3, "3.2": 3, "3.3": 4,
+            "4.1": 3, "4.2": 3, "4.3": 4,
+            "5.1": 3, "5.2": 3, "5.3": 4,
+            "6.1": 3, "6.2": 3, "6.3": 4,
+            "7.1": 3, "7.2": 3, "7.3": 4,
+            "8.1": 3, "8.2": 3, "8.3": 4,
+            "9.1": 3, "9.2": 3, "9.3": 3,
+            "10.1": 3, "10.2": 3, "10.3": 3
+          },
+          "contract_holder_name": "A. Rahman",
+          "contract_holder_signoff_date": "2026-07-25",
+          "qhse_advisor_name": "",
+          "qhse_advisor_signoff_date": "",
+          "justifications": "",
+          "vendor_id": "VEN-001",
+          "source_tender_number": "TND-2026-001",
+          "finalized_at": "2026-07-25",
+          "validity_end_date": "2027-07-25",
+          "reusedFromTender": null
+        },
+        "financial": {
+          "statements": [
+            { "year": 2025, "revenue": 15000000, "gross_profit": 4500000, "net_profit_loss": 1800000, "total_assets": 12000000, "total_liabilities": 5000000, "total_equity": 7000000, "current_assets": 6000000, "current_liabilities": 3000000 },
+            { "year": 2024, "revenue": 13500000, "gross_profit": 4000000, "net_profit_loss": 1500000, "total_assets": 11000000, "total_liabilities": 4800000, "total_equity": 6200000, "current_assets": 5500000, "current_liabilities": 2900000 }
+          ],
+          "riskFlags": [],
+          "outcome": "Pass",
+          "evaluatorComments": "Healthy liquidity and profitability, no red flags.",
+          "vendor_id": "VEN-001",
+          "source_tender_number": "TND-2026-001",
+          "finalized_at": "2026-07-25",
+          "validity_end_date": "2027-07-25",
+          "reusedFromTender": null
+        },
+        "icv": { "icv_certificate_ref": "ICV-2026-0142", "icv_score_pct": 72, "omanised_roles_confirmed": true, "min_icv_threshold": 60 },
+        "finalRecommendation": ""
+      },
+      {
+        "bidder_id": "2026001-B2",
+        "name": "Beta Supply Co.",
+        "vendor_id": "VEN-002",
+        "complianceResponses": { "2026001-C1": "Comply", "2026001-C2": "Comply", "2026001-C3": "Not Comply", "2026001-C4": "Comply", "2026001-C5": "Not Comply", "2026001-C6": "Comply" },
+        "qhse": {
+          "contractor_name": "Beta Supply Co. WLL",
+          "contractor_address": "Way 4207, Building 12, Ghala",
+          "contract_title": "Supply of Drilling Consumables - Annual Contract",
+          "contractor_representative": "S. Hamdan",
+          "submission_date": "2026-07-22",
+          "ratings": {
+            "1.1": 1, "1.2": 1, "1.3": 1,
+            "2.1": 1, "2.2": 1, "2.3": 1,
+            "3.1": 1, "3.2": 1, "3.3": 1,
+            "4.1": 1, "4.2": 1, "4.3": 1,
+            "5.1": 1, "5.2": 1, "5.3": 1,
+            "6.1": 1, "6.2": 1, "6.3": 1,
+            "7.1": 1, "7.2": 2, "7.3": 2,
+            "8.1": 1, "8.2": 2, "8.3": 2,
+            "9.1": 1, "9.2": 2, "9.3": 2,
+            "10.1": 1, "10.2": 2, "10.3": 2
+          },
+          "contract_holder_name": "A. Rahman",
+          "contract_holder_signoff_date": "2026-07-27",
+          "qhse_advisor_name": "",
+          "qhse_advisor_signoff_date": "",
+          "justifications": ""
+        },
+        "financial": {
+          "statements": [
+            { "year": 2025, "revenue": 2000000, "gross_profit": 300000, "net_profit_loss": -100000, "total_assets": 1800000, "total_liabilities": 1700000, "total_equity": 100000, "current_assets": 700000, "current_liabilities": 1150000 }
+          ],
+          "riskFlags": [
+            { "flag_type": "negative_equity", "description": "Equity is only ~5.6% of total assets, indicating thin capitalization." }
+          ],
+          "outcome": "Fail",
+          "evaluatorComments": "Current ratio below 1.0 and negative net margin."
+        },
+        "icv": { "icv_certificate_ref": "ICV-2026-0198", "icv_score_pct": 40, "omanised_roles_confirmed": false, "min_icv_threshold": 60 },
+        "finalRecommendation": ""
+      },
+      {
+        "bidder_id": "2026001-B3",
+        "name": "Gamma Industrial",
+        "vendor_id": "VEN-003",
+        "complianceResponses": { "2026001-C1": "Comply", "2026001-C2": "Comply", "2026001-C3": "Comply", "2026001-C4": "Not Comply", "2026001-C5": "Comply", "2026001-C6": "Comply" },
+        "qhse": {
+          "contractor_name": "Gamma Industrial Services SAOC",
+          "contractor_address": "Sohar Industrial Port Area",
+          "contract_title": "Supply of Drilling Consumables - Annual Contract",
+          "contractor_representative": "M. Al-Farsi",
+          "submission_date": "2026-07-18",
+          "ratings": {
+            "1.1": 3, "1.2": 4, "1.3": 4,
+            "2.1": 3, "2.2": 4, "2.3": 4,
+            "3.1": 2, "3.2": 3, "3.3": 3,
+            "4.1": 2, "4.2": 3, "4.3": 3,
+            "5.1": 2, "5.2": 3, "5.3": 3,
+            "6.1": 2, "6.2": 3, "6.3": 3,
+            "7.1": 2, "7.2": 3, "7.3": 3,
+            "8.1": 2, "8.2": 3, "8.3": 3,
+            "9.1": 2, "9.2": 2, "9.3": 2,
+            "10.1": 2, "10.2": 2, "10.3": 2
+          },
+          "contract_holder_name": "A. Rahman",
+          "contract_holder_signoff_date": "2026-07-24",
+          "qhse_advisor_name": "",
+          "qhse_advisor_signoff_date": "",
+          "justifications": "",
+          "vendor_id": "VEN-003",
+          "source_tender_number": "TND-2026-001",
+          "finalized_at": "2025-01-10",
+          "validity_end_date": "2026-01-10",
+          "reusedFromTender": null
+        },
+        "financial": {
+          "statements": [
+            { "year": 2024, "revenue": 47148224, "gross_profit": 9691596, "net_profit_loss": 6030491, "total_assets": 76110300, "total_liabilities": 68393956, "total_equity": 7716344, "current_assets": 28385833, "current_liabilities": 24449890 },
+            { "year": 2023, "revenue": 50559697, "gross_profit": 7372187, "net_profit_loss": 1796434, "total_assets": 92924908, "total_liabilities": 80326218, "total_equity": 12598690, "current_assets": 29634972, "current_liabilities": 27340244 }
+          ],
+          "riskFlags": [
+            { "flag_type": "going_concern_note", "description": "Going concern basis disclosed; management viability assessment covers only ~12 months forward from report date." },
+            { "flag_type": "covenant_breach_or_tight_headroom", "description": "Bidder discloses financial covenants (current ratio >= 1:1, debt/EBITDA <= 3.5x) with thin headroom, though technically compliant." },
+            { "flag_type": "negative_equity", "description": "Equity is only ~10% of total assets - thin capitalization relative to balance sheet size." }
+          ],
+          "outcome": "Review",
+          "evaluatorComments": "Current ratio and profitability pass a naive threshold check, but going-concern and covenant-headroom flags warrant panel review before a Pass is confirmed."
+        },
+        "icv": { "icv_certificate_ref": "ICV-2026-0071", "icv_score_pct": 55, "omanised_roles_confirmed": true, "min_icv_threshold": 60 },
+        "finalRecommendation": ""
+      }
+    ],
+    "evaluators": ["A. Rahman", "S. Kumar", "M. Al-Farsi"]
+  },
+  {
+    "tender_number": "TND-2026-002",
+    "tender_title": "Maintenance & Inspection Services - Pipeline Network",
+    "issuance_date": "2026-08-10",
+    "bid_closing_date": "2026-09-05",
+    "category": "Maintenance",
+    "status": "Draft Criteria",
+    "approvalStatus": "Not Started",
+    "financialThreshold": { "min_current_ratio": 1.0, "max_debt_to_equity": 2.5, "min_net_profit_margin_pct": 0 },
+    "criteria": [
+      { "criterion_id": "2026002-C1", "criteria_type": "Essential", "sequence_no": "1", "requirement_description": "Valid trade license for pipeline maintenance services", "end_user_notes": "" },
+      { "criterion_id": "2026002-C2", "criteria_type": "Essential", "sequence_no": "2", "requirement_description": "ISO 45001 certification", "end_user_notes": "" },
+      { "criterion_id": "2026002-C3", "criteria_type": "General", "sequence_no": "3", "requirement_description": "Minimum 5 years pipeline inspection experience", "end_user_notes": "" }
+    ],
+    "bidders": [],
+    "evaluators": ["R. Nair"]
+  },
+  {
+    "tender_number": "TND-2025-047",
+    "tender_title": "IT Managed Services - Field Offices",
+    "issuance_date": "2025-09-01",
+    "bid_closing_date": "2025-10-01",
+    "category": "IT & Telecom",
+    "status": "Awarded",
+    "approvalStatus": "Approved",
+    "financialThreshold": { "min_current_ratio": 1.0, "max_debt_to_equity": 2.0, "min_net_profit_margin_pct": 0 },
+    "criteria": [
+      { "criterion_id": "2025047-C1", "criteria_type": "Essential", "sequence_no": "1", "requirement_description": "Valid IT services trade license", "end_user_notes": "" },
+      { "criterion_id": "2025047-C2", "criteria_type": "Essential", "sequence_no": "2", "requirement_description": "ISO 27001 certification", "end_user_notes": "" },
+      { "criterion_id": "2025047-C3", "criteria_type": "General", "sequence_no": "3", "requirement_description": "24/7 helpdesk coverage across all field offices", "end_user_notes": "" }
+    ],
+    "bidders": [
+      {
+        "bidder_id": "2025047-B1",
+        "name": "NextGen IT Solutions",
+        "vendor_id": "VEN-004",
+        "complianceResponses": { "2025047-C1": "Comply", "2025047-C2": "Comply", "2025047-C3": "Comply" },
+        "qhse": {
+          "contractor_name": "NextGen IT Solutions LLC",
+          "contractor_address": "Al Ghubra, Muscat",
+          "contract_title": "IT Managed Services - Field Offices",
+          "contractor_representative": "T. Yusuf",
+          "submission_date": "2025-09-15",
+          "ratings": {
+            "1.1": 3, "1.2": 4, "1.3": 4,
+            "2.1": 3, "2.2": 4, "2.3": 4,
+            "3.1": 3, "3.2": 4, "3.3": 4,
+            "4.1": 3, "4.2": 4, "4.3": 4,
+            "5.1": 3, "5.2": 4, "5.3": 4,
+            "6.1": 3, "6.2": 4, "6.3": 4,
+            "7.1": 3, "7.2": 4, "7.3": 4,
+            "8.1": 3, "8.2": 4, "8.3": 4,
+            "9.1": 3, "9.2": 4, "9.3": 4,
+            "10.1": 3, "10.2": 3, "10.3": 3
+          },
+          "contract_holder_name": "T. Yusuf",
+          "contract_holder_signoff_date": "2025-09-20",
+          "qhse_advisor_name": "N. Hassan",
+          "qhse_advisor_signoff_date": "2025-09-25",
+          "justifications": ""
+        },
+        "financial": {
+          "statements": [
+            { "year": 2024, "revenue": 3000000, "gross_profit": 1100000, "net_profit_loss": 270000, "total_assets": 2400000, "total_liabilities": 1100000, "total_equity": 1300000, "current_assets": 1500000, "current_liabilities": 830000 }
+          ],
+          "riskFlags": [],
+          "outcome": "Pass",
+          "evaluatorComments": "Solid liquidity, no concerns."
+        },
+        "icv": { "icv_certificate_ref": "ICV-2025-0311", "icv_score_pct": 68, "omanised_roles_confirmed": true, "min_icv_threshold": 60 },
+        "finalRecommendation": "Recommended for award - highest composite score, clean QHSE and financial results."
+      },
+      {
+        "bidder_id": "2025047-B2",
+        "name": "Falcon Tech",
+        "vendor_id": "VEN-005",
+        "complianceResponses": { "2025047-C1": "Comply", "2025047-C2": "Comply", "2025047-C3": "Comply" },
+        "qhse": {
+          "contractor_name": "Falcon Technology LLC",
+          "contractor_address": "Azaiba, Muscat",
+          "contract_title": "IT Managed Services - Field Offices",
+          "contractor_representative": "H. Al-Kindi",
+          "submission_date": "2025-09-14",
+          "ratings": {
+            "1.1": 3, "1.2": 4, "1.3": 4,
+            "2.1": 3, "2.2": 4, "2.3": 4,
+            "3.1": 3, "3.2": 4, "3.3": 4,
+            "4.1": 3, "4.2": 4, "4.3": 4,
+            "5.1": 2, "5.2": 3, "5.3": 3,
+            "6.1": 2, "6.2": 3, "6.3": 3,
+            "7.1": 2, "7.2": 3, "7.3": 3,
+            "8.1": 2, "8.2": 3, "8.3": 3,
+            "9.1": 2, "9.2": 3, "9.3": 3,
+            "10.1": 2, "10.2": 3, "10.3": 3
+          },
+          "contract_holder_name": "T. Yusuf",
+          "contract_holder_signoff_date": "2025-09-19",
+          "qhse_advisor_name": "N. Hassan",
+          "qhse_advisor_signoff_date": "2025-09-24",
+          "justifications": ""
+        },
+        "financial": {
+          "statements": [
+            { "year": 2024, "revenue": 2200000, "gross_profit": 750000, "net_profit_loss": 150000, "total_assets": 1700000, "total_liabilities": 900000, "total_equity": 800000, "current_assets": 950000, "current_liabilities": 620000 }
+          ],
+          "riskFlags": [],
+          "outcome": "Pass",
+          "evaluatorComments": "Acceptable financial position."
+        },
+        "icv": { "icv_certificate_ref": "ICV-2025-0287", "icv_score_pct": 61, "omanised_roles_confirmed": true, "min_icv_threshold": 60 },
+        "finalRecommendation": "Qualified, ranked second."
+      }
+    ],
+    "evaluators": ["A. Rahman", "T. Yusuf"]
+  }
+]

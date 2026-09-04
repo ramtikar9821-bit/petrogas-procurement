@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tender Evaluation — Petrogas Procurement</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 14px 0 16px; }
+  .tab-btn {
+    background: none; border: none; color: var(--text-muted); font-weight: 600;
+    padding: 8px 14px; border-bottom: 2px solid transparent; border-radius: 0; cursor: pointer;
+  }
+  .tab-btn:hover { background: #f0f3f7; color: var(--text); }
+  .tab-btn.active { color: var(--teal-dark); border-bottom-color: var(--teal); }
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+  .mini-table th { text-align: left; background: #f0f3f7; padding: 6px 8px; font-weight: 600; color: var(--navy); }
+  .mini-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .mini-table select, .mini-table input { padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; width: 100%; }
+  .summary-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .summary-chip { background: #f4f6f9; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 12px; min-width: 100px; }
+  .summary-chip .num { font-size: 18px; font-weight: 700; color: var(--navy); }
+  .element-block { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+  .element-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #fafbfd; font-size: 13px; font-weight: 600; }
+  .risk-flag { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; background: #fdf3dc; }
+  .add-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; }
+  .add-row .form-row { margin-bottom: 0; flex: 1; min-width: 140px; }
+  .field-readonly { color: var(--text-muted); font-style: italic; }
+  .bidder-table td, .bidder-table th { text-align: center; }
+  .bidder-table td:first-child, .bidder-table th:first-child { text-align: left; }
+</style>
+</head>
+<body>
+
+<main>
+  <div id="tenderListView">
+    <div class="page-header">
+      <h1>Automated Tender Evaluation</h1>
+      <p>Compliance, QHSE, Financial, and ICV sub-evaluations roll up into one Master Evaluation View per bidder.</p>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="searchBox" placeholder="Search tender number, title, or category...">
+      <button id="addBtn" onclick="PGP.openModal('addModal')">+ New Tender</button>
+    </div>
+
+    <div id="tenderCards"></div>
+  </div>
+
+  <div id="evalWorkspace" style="display:none;">
+    <button class="secondary" style="margin-bottom:14px;" onclick="closeWorkspace()">&larr; Back to Tenders</button>
+    <div class="page-header">
+      <h1 id="wsTitle"></h1>
+      <p id="wsSubtitle" style="color:var(--text-muted);font-size:13px;"></p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;font-size:15px;color:var(--navy);">Evaluation Criteria</h2>
+      <table class="mini-table" id="criteriaTable">
+        <thead><tr><th>#</th><th>Type</th><th>Requirement</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="criteriaAddRow"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin-top:0;font-size:15px;color:var(--navy);">Master Evaluation View</h2>
+      </div>
+      <table class="mini-table bidder-table" id="bidderTable">
+        <thead><tr><th>Bidder</th><th>Compliance</th><th>QHSE</th><th>Financial</th><th>ICV</th><th>Overall</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="bidderAddRow"></div>
+    </div>
+  </div>
+</main>
+
+<!-- New tender -->
+<div class="modal-backdrop" id="addModal">
+  <div class="modal">
+    <h2>New Tender</h2>
+    <form id="addForm">
+      <div class="form-row"><label>Tender Number</label><input type="text" name="tender_number" placeholder="e.g. TND-2026-003" required></div>
+      <div class="form-row"><label>Title</label><input type="text" name="tender_title" required></div>
+      <div class="form-row"><label>Category</label><input type="text" name="category" placeholder="e.g. Maintenance"></div>
+      <div class="form-row"><label>Issuance Date</label><input type="date" name="issuance_date"></div>
+      <div class="form-row"><label>Bid Closing Date</label><input type="date" name="bid_closing_date"></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="PGP.closeModal('addModal')">Cancel</button>
+        <button type="submit">Create Tender</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Evaluate bidder -->
+<div class="modal-backdrop" id="evalModal">
+  <div class="modal" style="width:720px;">
+    <h2 id="evalModalTitle"></h2>
+    <div class="tab-bar" id="tabBar">
+      <button class="tab-btn" data-tab="compliance" onclick="switchTab('compliance')">Compliance</button>
+      <button class="tab-btn" data-tab="qhse" onclick="switchTab('qhse')">QHSE</button>
+      <button class="tab-btn" data-tab="financial" onclick="switchTab('financial')">Financial</button>
+      <button class="tab-btn" data-tab="icv" onclick="switchTab('icv')">ICV</button>
+    </div>
+    <div id="evalTabBody"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="PGP.closeModal('evalModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+const STORAGE_KEY = "pgp_tenders_full";
+let ALL = [];
+let QHSE_QUESTIONS = [];
+let VENDORS = [];
+let currentTenderNumber = null;
+let currentBidderId = null;
+let currentTab = "compliance";
+
+function tender() { return ALL.find(t => t.tender_number === currentTenderNumber); }
+function bidder() { return tender()?.bidders.find(b => b.bidder_id === currentBidderId); }
+function save() { PGP.saveFullList(STORAGE_KEY, ALL); }
+
+function statusBadge(status) {
+  const map = { "Draft Criteria": "gray", "Evaluation In Progress": "amber", "Pending DOA Approval": "teal", "Awarded": "green" };
+  return `<span class="badge ${map[status] || 'gray'}">${PGP.escapeHtml(status)}</span>`;
+}
+
+// ---------------- Tender list ----------------
+
+function renderTenderList(items) {
+  const el = document.getElementById("tenderCards");
+  if (items.length === 0) {
+    el.innerHTML = `<div class="card empty-state">No tenders match your search.</div>`;
+    return;
+  }
+  el.innerHTML = items.map(t => `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:12px;color:var(--text-muted);">${PGP.escapeHtml(t.tender_number)} · ${PGP.escapeHtml(t.category || "Uncategorized")}</div>
+          <div style="font-size:17px;font-weight:700;color:var(--navy);margin-top:2px;">${PGP.escapeHtml(t.tender_title)}</div>
+        </div>
+        <div>${statusBadge(t.status)}</div>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;margin:14px 0;font-size:13px;color:var(--text-muted);">
+        <div>Bid closing: <strong style="color:var(--text);">${PGP.formatDate(t.bid_closing_date)}</strong></div>
+        <div>Criteria: <strong style="color:var(--text);">${t.criteria.length}</strong></div>
+        <div>Bidders: <strong style="color:var(--text);">${t.bidders.length}</strong></div>
+        <div>Approval: <strong style="color:var(--text);">${PGP.escapeHtml(t.approvalStatus || "—")}</strong></div>
+      </div>
+      <button class="secondary" onclick="openWorkspace('${t.tender_number}')">Open Evaluation Workspace</button>
+    </div>
+  `).join("");
+}
+
+function applySearch() {
+  const q = document.getElementById("searchBox").value.toLowerCase();
+  renderTenderList(ALL.filter(t =>
+    t.tender_title.toLowerCase().includes(q) ||
+    t.tender_number.toLowerCase().includes(q) ||
+    (t.category || "").toLowerCase().includes(q)
+  ));
+}
+
+// ---------------- Workspace ----------------
+
+function openWorkspace(tn) {
+  currentTenderNumber = tn;
+  document.getElementById("tenderListView").style.display = "none";
+  document.getElementById("evalWorkspace").style.display = "block";
+  renderWorkspace();
+}
+
+function closeWorkspace() {
+  currentTenderNumber = null;
+  document.getElementById("evalWorkspace").style.display = "none";
+  document.getElementById("tenderListView").style.display = "block";
+}
+
+function renderWorkspace() {
+  const t = tender();
+  if (!t) return;
+  document.getElementById("wsTitle").textContent = `${t.tender_number} — ${t.tender_title}`;
+  document.getElementById("wsSubtitle").textContent = `${t.category || "Uncategorized"} · Bid closing ${PGP.formatDate(t.bid_closing_date)} · ${statusBadgeText(t.status)}`;
+
+  // Criteria
+  const cBody = document.querySelector("#criteriaTable tbody");
+  cBody.innerHTML = t.criteria.length === 0
+    ? `<tr><td colspan="3" class="empty-state">No criteria configured yet.</td></tr>`
+    : t.criteria.map(c => `
+        <tr>
+          <td>${PGP.escapeHtml(c.sequence_no)}</td>
+          <td><span class="badge ${c.criteria_type === 'Essential' ? 'red' : 'gray'}">${c.criteria_type}</span></td>
+          <td>${PGP.escapeHtml(c.requirement_description)}</td>
+        </tr>
+      `).join("");
+
+  const canEditTender = PGP.hasPermission("tenders");
+  const criteriaAddRow = document.getElementById("criteriaAddRow");
+  if (canEditTender) {
+    criteriaAddRow.innerHTML = `
+      <div class="add-row">
+        <div class="form-row"><label>Type</label><select id="newCritType"><option>Essential</option><option>General</option></select></div>
+        <div class="form-row" style="flex:2;"><label>Requirement</label><input type="text" id="newCritText" placeholder="e.g. Valid trade license"></div>
+        <button type="button" onclick="addCriterion()">+ Add Criterion</button>
+      </div>
+    `;
+  } else {
+    criteriaAddRow.innerHTML = `<div class="note-banner" style="margin-top:10px;">Only ${PGP.PERMISSIONS.tenders.join(", ")} can add criteria. Logged in as ${PGP.getRole()}.</div>`;
+  }
+
+  // Bidders / Master Evaluation View
+  const bBody = document.querySelector("#bidderTable tbody");
+  if (t.bidders.length === 0) {
+    bBody.innerHTML = `<tr><td colspan="7" class="empty-state">No bidders yet.</td></tr>`;
+  } else {
+    bBody.innerHTML = t.bidders.map(b => {
+      const mev = PGP.TenderEval.masterEvaluationView(t, b, QHSE_QUESTIONS);
+      const compBadge = `<span class="badge ${mev.compliance.status === 'Qualify' ? 'green' : 'red'}">${mev.compliance.status}</span>` +
+        (mev.compliance.complete ? "" : `<div style="font-size:11px;color:var(--text-muted);">${mev.compliance.essentialAnswered}/${mev.compliance.essentialTotal} essential answered</div>`);
+      const qhseCls = { B: "green", C: "teal", D: "amber", E: "red" }[mev.qhse.overall_class] || "gray";
+      const qhseBadge = mev.qhse.overall_class
+        ? `<span class="badge ${qhseCls}">${mev.qhse.overall_class} · ${mev.qhse.overall_pct}%</span>` + (mev.qhse.complete ? "" : `<div style="font-size:11px;color:var(--text-muted);">incomplete</div>`)
+        : `<span style="color:var(--text-muted);">Not started</span>`;
+      const finCls = { Pass: "green", Review: "amber", Fail: "red" }[mev.financialOutcome] || "gray";
+      const finBadge = mev.ratios ? `<span class="badge ${finCls}">${mev.financialOutcome}</span>` : `<span style="color:var(--text-muted);">—</span>`;
+      const icvBadge = mev.icv ? `<span class="badge ${mev.icv === 'Pass' ? 'green' : 'red'}">${mev.icv}</span>` : `<span style="color:var(--text-muted);">—</span>`;
+      const overallBadge = `<span class="badge ${mev.overall_status === 'Qualify' ? 'green' : 'red'}">${mev.overall_status}</span>`;
+      const reusedNote = (b.qhse?.reusedFromTender || b.financial?.reusedFromTender)
+        ? `<div style="font-size:11px;color:var(--text-muted);">reused: ${[b.qhse?.reusedFromTender && "QHSE", b.financial?.reusedFromTender && "Financial"].filter(Boolean).join(" + ")}</div>`
+        : "";
+      return `
+        <tr>
+          <td>${PGP.escapeHtml(b.name)}${reusedNote}</td>
+          <td>${compBadge}</td>
+          <td>${qhseBadge}</td>
+          <td>${finBadge}</td>
+          <td>${icvBadge}</td>
+          <td>${overallBadge}</td>
+          <td><button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openEval('${b.bidder_id}')">Evaluate</button></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  const bidderAddRow = document.getElementById("bidderAddRow");
+  if (canEditTender) {
+    bidderAddRow.innerHTML = `
+      <div class="add-row">
+        <div class="form-row"><label>CR Number</label><input type="text" id="newBidderCr" placeholder="e.g. 1023456" onblur="prefillBidderName()"></div>
+        <div class="form-row" style="flex:2;"><label>Bidder Name</label><input type="text" id="newBidderName" placeholder="e.g. Delta Services LLC"></div>
+        <button type="button" onclick="addBidder()">+ Add Bidder</button>
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">Matching an existing CR number reuses that vendor's record — you'll be asked to confirm reuse of any still-valid QHSE/Financial assessment.</p>
+    `;
+  } else {
+    bidderAddRow.innerHTML = `<div class="note-banner" style="margin-top:10px;">Only ${PGP.PERMISSIONS.tenders.join(", ")} can add bidders. Logged in as ${PGP.getRole()}.</div>`;
+  }
+}
+
+function statusBadgeText(status) { return status; }
+
+function addCriterion() {
+  const t = tender();
+  const type = document.getElementById("newCritType").value;
+  const text = document.getElementById("newCritText").value.trim();
+  if (!text) { alert("Enter a requirement description."); return; }
+  const seq = t.criteria.length + 1;
+  t.criteria.push({
+    criterion_id: `${t.tender_number}-C${seq}-${Date.now().toString(36)}`,
+    criteria_type: type,
+    sequence_no: String(seq),
+    requirement_description: text,
+    end_user_notes: ""
+  });
+  save();
+  renderWorkspace();
+}
+
+function prefillBidderName() {
+  const cr = document.getElementById("newBidderCr").value.trim();
+  const nameInput = document.getElementById("newBidderName");
+  if (!cr || nameInput.value.trim()) return;
+  const vendor = PGP.findVendorByCr(VENDORS, cr);
+  if (vendor) nameInput.value = vendor.vendor_name;
+}
+
+// Building block for a fresh (non-reused) QHSE/Financial sub-evaluation —
+// same shape addBidder always used, now named so the reuse path below can
+// fall back to it.
+function blankQhse(name, tenderTitle) {
+  return { contractor_name: name, contractor_address: "", contract_title: tenderTitle, contractor_representative: "", submission_date: "", ratings: {}, contract_holder_name: "", contract_holder_signoff_date: "", qhse_advisor_name: "", qhse_advisor_signoff_date: "", justifications: "", vendor_id: null, source_tender_number: null, finalized_at: null, validity_end_date: null, reusedFromTender: null };
+}
+function blankFinancial() {
+  return { statements: [], riskFlags: [], outcome: "", evaluatorComments: "", vendor_id: null, source_tender_number: null, finalized_at: null, validity_end_date: null, reusedFromTender: null };
+}
+
+// Confirms reuse of a still-valid QHSE/Financial assessment for this vendor
+// (buildspec Section 3.0 — "the evaluator is prompted to confirm reuse
+// rather than the system auto-pulling it silently"). Prototype simplification:
+// reuse is a deep copy of the finalized block, tagged with reusedFromTender,
+// rather than a live foreign-key link — there's no relational store here.
+function offerReuse(vendorId, type, label) {
+  const register = PGP.computeSupplierValidityRegister(ALL, VENDORS, PGP.getValidityConfig());
+  const entry = register.find(e => e.vendor_id === vendorId && e.assessment_type === label && e.status === "Valid");
+  if (!entry) return null;
+  const proceed = confirm(
+    `A valid ${label} assessment exists for this vendor from Tender ${entry.source_tender_number}, ` +
+    `valid until ${PGP.formatDate(entry.validity_end_date)}. Reuse it instead of starting a new ${label.toLowerCase()} evaluation?`
+  );
+  if (!proceed) return null;
+  // Find the actual source block to copy (the register only holds a summary).
+  for (const t of ALL) {
+    for (const b of (t.bidders || [])) {
+      if (b.vendor_id !== vendorId) continue;
+      const block = type === "qhse" ? b.qhse : b.financial;
+      if (block && block.finalized_at === entry.finalized_at) {
+        const copy = JSON.parse(JSON.stringify(block));
+        copy.reusedFromTender = entry.source_tender_number;
+        return copy;
+      }
+    }
+  }
+  return null;
+}
+
+async function addBidder() {
+  const t = tender();
+  const cr = document.getElementById("newBidderCr").value.trim();
+  const name = document.getElementById("newBidderName").value.trim();
+  if (!name) { alert("Enter a bidder name."); return; }
+
+  let vendor = null;
+  if (cr) {
+    try {
+      vendor = await PGP.upsertVendor(VENDORS, { cr_number: cr, vendor_name: name });
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+  }
+
+  let qhse = blankQhse(name, t.tender_title);
+  let financial = blankFinancial();
+
+  if (vendor) {
+    const reusedQhse = offerReuse(vendor.vendor_id, "qhse", "QHSE");
+    if (reusedQhse) qhse = reusedQhse;
+    const reusedFinancial = offerReuse(vendor.vendor_id, "financial", "Financial");
+    if (reusedFinancial) financial = reusedFinancial;
+  }
+
+  t.bidders.push({
+    bidder_id: `${t.tender_number}-B${t.bidders.length + 1}-${Date.now().toString(36)}`,
+    name,
+    vendor_id: vendor ? vendor.vendor_id : null,
+    complianceResponses: {},
+    qhse,
+    financial,
+    icv: { icv_certificate_ref: "", icv_score_pct: null, omanised_roles_confirmed: false, min_icv_threshold: 60 },
+    finalRecommendation: ""
+  });
+  save();
+  renderWorkspace();
+}
+
+// ---------------- Evaluate modal ----------------
+
+function openEval(bidderId) {
+  currentBidderId = bidderId;
+  currentTab = "compliance";
+  document.getElementById("evalModalTitle").textContent = `Evaluate — ${bidder().name}`;
+  renderEvalTab();
+  PGP.openModal("evalModal");
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  renderEvalTab();
+}
+
+function renderEvalTab() {
+  document.querySelectorAll("#tabBar .tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === currentTab));
+  const body = document.getElementById("evalTabBody");
+  if (currentTab === "compliance") body.innerHTML = renderComplianceTab();
+  else if (currentTab === "qhse") body.innerHTML = renderQhseTab();
+  else if (currentTab === "financial") body.innerHTML = renderFinancialTab();
+  else if (currentTab === "icv") body.innerHTML = renderIcvTab();
+}
+
+function persistAndRefresh() {
+  save();
+  renderWorkspace();
+  renderEvalTab();
+}
+
+// --- Compliance tab ---
+function renderComplianceTab() {
+  const t = tender(), b = bidder();
+  const canEdit = PGP.hasPermission("tendersCompliance");
+  const status = PGP.TenderEval.complianceStatus(t.criteria, b.complianceResponses);
+  let html = `
+    <div class="summary-strip">
+      <div class="summary-chip">Status<div class="num" style="color:${status.status === 'Qualify' ? 'var(--green)' : 'var(--red)'};">${status.status}</div></div>
+      <div class="summary-chip">Essential answered<div class="num">${status.essentialAnswered}/${status.essentialTotal}</div></div>
+    </div>
+  `;
+  if (!canEdit) html += `<div class="note-banner">Only ${PGP.PERMISSIONS.tendersCompliance.join(", ")} can capture compliance responses. Logged in as ${PGP.getRole()}.</div>`;
+  html += `<table class="mini-table"><thead><tr><th>Type</th><th>Requirement</th><th>Response</th></tr></thead><tbody>`;
+  t.criteria.forEach(c => {
+    const val = b.complianceResponses[c.criterion_id] || "";
+    const color = PGP.TenderEval.statusColorFor(val);
+    const colorMap = { Green: "green", Red: "red", Yellow: "amber" };
+    html += `<tr>
+      <td><span class="badge ${c.criteria_type === 'Essential' ? 'red' : 'gray'}">${c.criteria_type}</span></td>
+      <td>${PGP.escapeHtml(c.requirement_description)}</td>
+      <td>
+        ${canEdit
+          ? `<select onchange="updateCompliance('${c.criterion_id}', this.value)">
+              <option value="" ${!val ? 'selected' : ''}>—</option>
+              <option value="Comply" ${val === 'Comply' ? 'selected' : ''}>Comply</option>
+              <option value="Not Comply" ${val === 'Not Comply' ? 'selected' : ''}>Not Comply</option>
+            </select>`
+          : `<span class="badge ${colorMap[color]}">${val || '—'}</span>`
+        }
+      </td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function updateCompliance(criterionId, value) {
+  const b = bidder();
+  if (value) b.complianceResponses[criterionId] = value;
+  else delete b.complianceResponses[criterionId];
+  persistAndRefresh();
+}
+
+// --- QHSE tab ---
+function renderQhseTab() {
+  const b = bidder();
+  const canEdit = PGP.hasPermission("tendersQHSE");
+  const result = PGP.TenderEval.qhseOverallResult(QHSE_QUESTIONS, b.qhse.ratings);
+  let html = `
+    <div class="summary-strip">
+      <div class="summary-chip">Overall %<div class="num">${result.overall_pct || 0}%</div></div>
+      <div class="summary-chip">Class<div class="num">${result.overall_class || '—'}</div></div>
+      <div class="summary-chip">B / C / D / E<div class="num">${result.counts.B}/${result.counts.C}/${result.counts.D}/${result.counts.E}</div></div>
+      <div class="summary-chip">Qualified<div class="num" style="color:${result.complete && result.qualified ? 'var(--green)' : 'var(--red)'};">${result.complete ? (result.qualified ? 'Yes' : 'No') : 'Incomplete'}</div></div>
+    </div>
+  `;
+  if (!canEdit) html += `<div class="note-banner">Only ${PGP.PERMISSIONS.tendersQHSE.join(", ")} can rate QHSE responses. Logged in as ${PGP.getRole()}.</div>`;
+  html += renderValidityStrip(b.qhse, "QHSE", canEdit, "finalizeQhse()");
+  QHSE_QUESTIONS.forEach((el, i) => {
+    const score = result.elementScores[i];
+    const clsColor = { B: "green", C: "teal", D: "amber", E: "red" }[score.class] || "gray";
+    html += `<div class="element-block">
+      <div class="element-head">
+        <span>${el.element_name}</span>
+        <span class="badge ${clsColor}">${score.class} · ${score.pct}%</span>
+      </div>
+      <table class="mini-table" style="margin:0;">
+        <tbody>
+          ${el.questions.map(q => {
+            const rating = b.qhse.ratings[q.question_no] || "";
+            return `<tr>
+              <td style="width:50px;">${q.question_no}</td>
+              <td>${PGP.escapeHtml(q.question_text)}</td>
+              <td style="width:180px;">
+                ${canEdit
+                  ? `<select onchange="updateQhseRating('${q.question_no}', this.value)">
+                      <option value="" ${!rating ? 'selected' : ''}>—</option>
+                      ${[1,2,3,4].map(r => `<option value="${r}" ${Number(rating)===r?'selected':''}>${r} — ${PGP.TenderEval.QHSE_RATING_SCALE[r]}</option>`).join("")}
+                    </select>`
+                  : rating ? `${rating} — ${PGP.TenderEval.QHSE_RATING_SCALE[rating]}` : `<span class="field-readonly">Not rated</span>`
+                }
+              </td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`;
+  });
+  return html;
+}
+
+function updateQhseRating(qNo, value) {
+  const b = bidder();
+  if (value) b.qhse.ratings[qNo] = Number(value);
+  else delete b.qhse.ratings[qNo];
+  persistAndRefresh();
+}
+
+// Shared "validity" strip for the QHSE/Financial tabs: shows reuse
+// provenance if this assessment was copied from an earlier tender, plus a
+// Finalize button that stamps the validity window (buildspec Section 3.0).
+function renderValidityStrip(block, label, canEdit, finalizeCall) {
+  let html = "";
+  if (block.reusedFromTender) {
+    html += `<div class="note-banner" style="margin-bottom:10px;">Reused from a valid ${label} assessment on Tender ${PGP.escapeHtml(block.reusedFromTender)} — not re-entered for this tender.</div>`;
+  }
+  if (block.finalized_at) {
+    html += `<p style="font-size:12px;color:var(--text-muted);">Finalized ${PGP.formatDate(block.finalized_at)} — valid until <strong>${PGP.formatDate(block.validity_end_date)}</strong>${PGP.daysUntil(block.validity_end_date) < 0 ? ' <span class="badge red">Expired</span>' : ''}.</p>`;
+  }
+  if (canEdit) {
+    html += `<div class="modal-actions" style="justify-content:flex-start;margin:0 0 12px;">
+      <button type="button" class="secondary" onclick="${finalizeCall}">${block.finalized_at ? "Re-finalize & Reset Validity" : "Finalize & Set Validity"}</button>
+    </div>`;
+  }
+  return html;
+}
+
+function finalizeQhse() {
+  const t = tender(), b = bidder();
+  if (!b.vendor_id) { alert("This bidder wasn't linked to a vendor (no CR number was entered when it was added) — validity tracking needs a vendor link, so it can't be finalized."); return; }
+  const cfg = PGP.getValidityConfig();
+  b.qhse.finalized_at = new Date().toISOString().slice(0, 10);
+  b.qhse.validity_end_date = PGP.addMonths(b.qhse.finalized_at, cfg.qhse_validity_months);
+  b.qhse.vendor_id = b.vendor_id;
+  b.qhse.source_tender_number = t.tender_number;
+  persistAndRefresh();
+}
+
+function finalizeFinancial() {
+  const t = tender(), b = bidder();
+  if (!b.vendor_id) { alert("This bidder wasn't linked to a vendor (no CR number was entered when it was added) — validity tracking needs a vendor link, so it can't be finalized."); return; }
+  const cfg = PGP.getValidityConfig();
+  b.financial.finalized_at = new Date().toISOString().slice(0, 10);
+  b.financial.validity_end_date = PGP.addMonths(b.financial.finalized_at, cfg.financial_validity_months);
+  b.financial.vendor_id = b.vendor_id;
+  b.financial.source_tender_number = t.tender_number;
+  persistAndRefresh();
+}
+
+// --- Financial tab ---
+function renderFinancialTab() {
+  const t = tender(), b = bidder();
+  const canEdit = PGP.hasPermission("tendersFinancial");
+  const ratios = PGP.TenderEval.financialRatios(b.financial.statements);
+  const suggested = PGP.TenderEval.suggestedFinancialOutcome(ratios, t.financialThreshold, b.financial.riskFlags);
+  const fields = ["revenue", "gross_profit", "net_profit_loss", "total_assets", "total_liabilities", "total_equity", "current_assets", "current_liabilities"];
+  const fieldLabels = { revenue: "Revenue", gross_profit: "Gross Profit", net_profit_loss: "Net Profit/Loss", total_assets: "Total Assets", total_liabilities: "Total Liabilities", total_equity: "Total Equity", current_assets: "Current Assets", current_liabilities: "Current Liabilities" };
+
+  let html = "";
+  if (ratios) {
+    html += `<div class="summary-strip">
+      <div class="summary-chip">Current Ratio<div class="num">${ratios.current_ratio?.toFixed(2) ?? '—'}</div></div>
+      <div class="summary-chip">Debt / Equity<div class="num">${ratios.debt_to_equity?.toFixed(2) ?? '—'}</div></div>
+      <div class="summary-chip">Net Margin<div class="num">${ratios.net_profit_margin_pct?.toFixed(1) ?? '—'}%</div></div>
+      <div class="summary-chip">Revenue YoY<div class="num">${ratios.revenue_yoy_growth_pct != null ? ratios.revenue_yoy_growth_pct.toFixed(1) + '%' : '—'}</div></div>
+    </div>`;
+  }
+  if (!canEdit) html += `<div class="note-banner">Only ${PGP.PERMISSIONS.tendersFinancial.join(", ")} can edit financial data. Logged in as ${PGP.getRole()}.</div>`;
+  html += renderValidityStrip(b.financial, "Financial", canEdit, "finalizeFinancial()");
+
+  html += `<table class="mini-table"><thead><tr><th>Line Item</th>${b.financial.statements.map(s => `<th>${s.year}</th>`).join("")}</tr></thead><tbody>`;
+  fields.forEach(f => {
+    html += `<tr><td>${fieldLabels[f]}</td>`;
+    b.financial.statements.forEach((s, idx) => {
+      html += `<td>${canEdit ? `<input type="number" value="${s[f] ?? ''}" onchange="updateFinancialField(${idx}, '${f}', this.value)">` : PGP.currency(s[f])}</td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+
+  if (canEdit) {
+    html += `<div class="add-row">
+      <div class="form-row"><label>Add Statement Year</label><input type="number" id="newStatementYear" placeholder="e.g. 2026" style="width:120px;"></div>
+      <button type="button" onclick="addStatementYear()">+ Add Year</button>
+    </div>`;
+  }
+
+  html += `<div class="section-title" style="font-size:13px;font-weight:700;color:var(--navy);margin:16px 0 8px;">Risk Flags</div>`;
+  if (b.financial.riskFlags.length === 0) {
+    html += `<div class="empty-state" style="padding:10px;">No risk flags recorded.</div>`;
+  } else {
+    html += b.financial.riskFlags.map((f, idx) => `
+      <div class="risk-flag">
+        <strong>${PGP.escapeHtml(f.flag_type.replace(/_/g, ' '))}</strong> — ${PGP.escapeHtml(f.description)}
+        ${canEdit ? `<button type="button" class="secondary" style="float:right;padding:2px 8px;font-size:11px;" onclick="removeRiskFlag(${idx})">Remove</button>` : ""}
+      </div>
+    `).join("");
+  }
+  if (canEdit) {
+    html += `<div class="add-row">
+      <div class="form-row"><label>Flag Type</label>
+        <select id="newFlagType">
+          <option value="going_concern_note">Going concern note</option>
+          <option value="accumulated_losses">Accumulated losses</option>
+          <option value="negative_equity">Negative / thin equity</option>
+          <option value="covenant_breach_or_tight_headroom">Covenant breach / tight headroom</option>
+          <option value="related_party_dependency">Related party dependency</option>
+        </select>
+      </div>
+      <div class="form-row" style="flex:2;"><label>Description</label><input type="text" id="newFlagDesc" placeholder="Describe the concern..."></div>
+      <button type="button" onclick="addRiskFlag()">+ Add Flag</button>
+    </div>`;
+  }
+
+  html += `<div class="section-title" style="font-size:13px;font-weight:700;color:var(--navy);margin:16px 0 8px;">Outcome</div>`;
+  html += `<div class="form-row"><label>Suggested (from core ratios + flags): <strong>${suggested || '—'}</strong></label>
+    ${canEdit
+      ? `<select onchange="updateFinancialOutcome(this.value)">
+          <option value="" ${!b.financial.outcome ? 'selected' : ''}>—</option>
+          <option value="Pass" ${b.financial.outcome === 'Pass' ? 'selected' : ''}>Pass</option>
+          <option value="Review" ${b.financial.outcome === 'Review' ? 'selected' : ''}>Review</option>
+          <option value="Fail" ${b.financial.outcome === 'Fail' ? 'selected' : ''}>Fail</option>
+        </select>`
+      : `<span class="badge ${{Pass:'green',Review:'amber',Fail:'red'}[b.financial.outcome] || 'gray'}">${b.financial.outcome || 'Not set'}</span>`
+    }
+  </div>`;
+  html += `<div class="form-row"><label>Evaluator Comments</label>
+    ${canEdit
+      ? `<textarea onchange="updateFinancialComments(this.value)">${PGP.escapeHtml(b.financial.evaluatorComments)}</textarea>`
+      : `<p>${PGP.escapeHtml(b.financial.evaluatorComments || '—')}</p>`
+    }
+  </div>`;
+
+  return html;
+}
+
+function updateFinancialField(idx, field, value) {
+  const b = bidder();
+  b.financial.statements[idx][field] = value === "" ? null : Number(value);
+  persistAndRefresh();
+}
+
+function addStatementYear() {
+  const b = bidder();
+  const year = Number(document.getElementById("newStatementYear").value);
+  if (!year) { alert("Enter a year."); return; }
+  b.financial.statements.push({ year, revenue: 0, gross_profit: 0, net_profit_loss: 0, total_assets: 0, total_liabilities: 0, total_equity: 0, current_assets: 0, current_liabilities: 0 });
+  persistAndRefresh();
+}
+
+function addRiskFlag() {
+  const b = bidder();
+  const type = document.getElementById("newFlagType").value;
+  const desc = document.getElementById("newFlagDesc").value.trim();
+  if (!desc) { alert("Enter a description for the flag."); return; }
+  b.financial.riskFlags.push({ flag_type: type, description: desc });
+  persistAndRefresh();
+}
+
+function removeRiskFlag(idx) {
+  bidder().financial.riskFlags.splice(idx, 1);
+  persistAndRefresh();
+}
+
+function updateFinancialOutcome(value) {
+  bidder().financial.outcome = value;
+  persistAndRefresh();
+}
+
+function updateFinancialComments(value) {
+  bidder().financial.evaluatorComments = value;
+  persistAndRefresh();
+}
+
+// --- ICV tab ---
+function renderIcvTab() {
+  const b = bidder();
+  const canEdit = PGP.hasPermission("tendersICV");
+  const status = PGP.TenderEval.icvStatus(b.icv);
+  let html = `
+    <div class="summary-strip">
+      <div class="summary-chip">ICV Score<div class="num">${b.icv.icv_score_pct ?? '—'}%</div></div>
+      <div class="summary-chip">Threshold<div class="num">${b.icv.min_icv_threshold ?? '—'}%</div></div>
+      <div class="summary-chip">Status<div class="num" style="color:${status === 'Pass' ? 'var(--green)' : 'var(--red)'};">${status || '—'}</div></div>
+    </div>
+  `;
+  if (!canEdit) html += `<div class="note-banner">Only ${PGP.PERMISSIONS.tendersICV.join(", ")} can edit ICV data. Logged in as ${PGP.getRole()}.</div>`;
+
+  html += `<div class="form-row"><label>ICV Certificate Reference</label>
+    ${canEdit ? `<input type="text" value="${PGP.escapeHtml(b.icv.icv_certificate_ref || '')}" onchange="updateIcvField('icv_certificate_ref', this.value)">` : `<p>${PGP.escapeHtml(b.icv.icv_certificate_ref || '—')}</p>`}
+  </div>`;
+  html += `<div class="form-row"><label>ICV Score (%)</label>
+    ${canEdit ? `<input type="number" value="${b.icv.icv_score_pct ?? ''}" onchange="updateIcvField('icv_score_pct', this.value)">` : `<p>${b.icv.icv_score_pct ?? '—'}</p>`}
+  </div>`;
+  html += `<div class="form-row"><label>Minimum ICV Threshold (%)</label>
+    ${canEdit ? `<input type="number" value="${b.icv.min_icv_threshold ?? ''}" onchange="updateIcvField('min_icv_threshold', this.value)">` : `<p>${b.icv.min_icv_threshold ?? '—'}</p>`}
+  </div>`;
+  html += `<div class="form-row">
+    <label><input type="checkbox" style="width:auto;display:inline-block;margin-right:6px;" ${b.icv.omanised_roles_confirmed ? 'checked' : ''} ${canEdit ? '' : 'disabled'} onchange="updateIcvField('omanised_roles_confirmed', this.checked)"> Omanised focal-point roles confirmed present</label>
+  </div>`;
+  return html;
+}
+
+function updateIcvField(field, value) {
+  const b = bidder();
+  if (field === "icv_score_pct" || field === "min_icv_threshold") b.icv[field] = value === "" ? null : Number(value);
+  else b.icv[field] = value;
+  persistAndRefresh();
+}
+
+// ---------------- Init ----------------
+
+async function init() {
+  PGP.guardAddButton("tenders", document.getElementById("addBtn"));
+  await PGP.initConfig();
+  const [tendersData, qhseData, vendorsData] = await Promise.all([
+    PGP.loadFullList("data/tenders.json", STORAGE_KEY),
+    fetch("data/qhse-questions.json").then(r => r.json()),
+    PGP.loadVendors()
+  ]);
+  ALL = tendersData;
+  QHSE_QUESTIONS = qhseData;
+  VENDORS = vendorsData;
+  renderTenderList(ALL);
+
+  document.getElementById("searchBox").addEventListener("input", applySearch);
+
+  document.getElementById("addForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const record = {
+      tender_number: fd.get("tender_number"),
+      tender_title: fd.get("tender_title"),
+      issuance_date: fd.get("issuance_date"),
+      bid_closing_date: fd.get("bid_closing_date"),
+      category: fd.get("category"),
+      status: "Draft Criteria",
+      approvalStatus: "Not Started",
+      financialThreshold: { min_current_ratio: 1.0, max_debt_to_equity: 2.0, min_net_profit_margin_pct: 0 },
+      criteria: [],
+      bidders: [],
+      evaluators: []
+    };
+    ALL.push(record);
+    save();
+    renderTenderList(ALL);
+    PGP.closeModal("addModal");
+    e.target.reset();
+  });
+}
+PGP.initAuth().then(() => {
+  PGP.renderChrome("tender-evaluation.html");
+  init();
+});
+</script>
+</body>
+</html>

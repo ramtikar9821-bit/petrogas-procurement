@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contract Lifecycle — Petrogas Procurement</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .history-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; background: #fafbfd; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.3px; }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="page-header">
+    <h1>Contract Expiry / Lifecycle Management</h1>
+    <p>Central repository of active contracts with auto-calculated status, renewal workflow, and full amendment history.</p>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="Search title, vendor, category, or owner...">
+    <div style="display:flex;gap:8px;">
+      <select id="statusFilter" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+        <option value="">All statuses</option>
+        <option value="Active">Active</option>
+        <option value="Expiring Soon">Expiring Soon</option>
+        <option value="Expired">Expired</option>
+      </select>
+      <button id="addBtn" onclick="PGP.openModal('addModal')">+ New Contract</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <table id="ctrTable">
+      <thead>
+        <tr><th>Contract</th><th>Vendor</th><th>Category</th><th>Value</th><th>End Date</th><th>Days Left</th><th>Status</th><th>Owner</th><th>Criticality</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="modal-backdrop" id="addModal">
+  <div class="modal">
+    <h2>New Contract</h2>
+    <form id="addForm">
+      <div class="form-row"><label>Contract Reference</label><input type="text" name="id" placeholder="e.g. CTR-2401" required></div>
+      <div class="form-row"><label>Title</label><input type="text" name="title" required></div>
+      <div class="form-row"><label>Vendor</label><input type="text" name="vendor" required></div>
+      <div class="form-row"><label>Category</label><input type="text" name="category"></div>
+      <div class="form-row"><label>Value (USD)</label><input type="number" name="value" min="0"></div>
+      <div class="form-row"><label>Start Date</label><input type="date" name="startDate" required></div>
+      <div class="form-row"><label>End Date</label><input type="date" name="endDate" required></div>
+      <div class="form-row"><label>Owner</label><input type="text" name="owner" required></div>
+      <div class="form-row">
+        <label>Criticality</label>
+        <select name="criticality">
+          <option>Low</option><option>Medium</option><option>High</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="PGP.closeModal('addModal')">Cancel</button>
+        <button type="submit">Create Contract</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Renewal / history -->
+<div class="modal-backdrop" id="detailModal">
+  <div class="modal" style="width:560px;">
+    <h2 id="detailTitle"></h2>
+    <div id="detailBody"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="PGP.closeModal('detailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+let ALL = [];
+let currentId = null;
+
+function critBadge(c) {
+  const map = { High: "red", Medium: "amber", Low: "gray" };
+  return `<span class="badge ${map[c] || 'gray'}">${c}</span>`;
+}
+
+function findItem(id) { return ALL.find(c => c.id === id); }
+
+function renderTable(items) {
+  const tbody = document.querySelector("#ctrTable tbody");
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">No contracts match your filters.</td></tr>`;
+    return;
+  }
+  const rows = items.map(c => ({ ...c, days: PGP.daysUntil(c.endDate), st: PGP.contractStatus(c.endDate) }))
+    .sort((a, b) => a.days - b.days);
+
+  tbody.innerHTML = rows.map(c => `
+    <tr>
+      <td>${PGP.escapeHtml(c.title)}<br><span style="font-size:11px;color:var(--text-muted);">${PGP.escapeHtml(c.id)}</span></td>
+      <td>${PGP.escapeHtml(c.vendor)}</td>
+      <td>${PGP.escapeHtml(c.category || "—")}</td>
+      <td>${PGP.currency(c.value)}</td>
+      <td>${PGP.formatDate(c.endDate)}</td>
+      <td>${c.days}</td>
+      <td><span class="badge ${c.st.cls}">${c.st.label}</span></td>
+      <td>${PGP.escapeHtml(c.owner)}</td>
+      <td>${critBadge(c.criticality || "Low")}</td>
+      <td><button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${c.id}')">Renew / History</button></td>
+    </tr>
+  `).join("");
+}
+
+function applyFilters() {
+  const q = document.getElementById("searchBox").value.toLowerCase();
+  const statusFilter = document.getElementById("statusFilter").value;
+  const filtered = ALL.filter(c => {
+    const matchesQ = c.title.toLowerCase().includes(q) || c.vendor.toLowerCase().includes(q) ||
+      (c.category || "").toLowerCase().includes(q) || c.owner.toLowerCase().includes(q);
+    const matchesStatus = !statusFilter || PGP.contractStatus(c.endDate).label === statusFilter;
+    return matchesQ && matchesStatus;
+  });
+  renderTable(filtered);
+}
+
+function openDetail(id) {
+  currentId = id;
+  renderDetail();
+  PGP.openModal("detailModal");
+}
+
+function renderDetail() {
+  const c = findItem(currentId);
+  if (!c) return;
+  const canManage = PGP.hasPermission("contracts");
+  const st = PGP.contractStatus(c.endDate);
+  document.getElementById("detailTitle").textContent = `${c.id} — ${c.title}`;
+
+  let html = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+      <div>Vendor: <strong style="color:var(--text);">${PGP.escapeHtml(c.vendor)}</strong></div>
+      <div>End date: <strong style="color:var(--text);">${PGP.formatDate(c.endDate)}</strong></div>
+      <div>Status: <span class="badge ${st.cls}">${st.label}</span></div>
+    </div>
+    <div class="section-title">Log a Renewal Decision</div>
+  `;
+
+  if (canManage) {
+    html += `
+      <div class="form-row"><label>Decision</label>
+        <select id="renewDecision" onchange="document.getElementById('renewDateRow').style.display = this.value === 'Do Not Renew' ? 'none' : 'block';">
+          <option value="Renew">Renew</option>
+          <option value="Extend">Extend</option>
+          <option value="Do Not Renew">Do Not Renew</option>
+        </select>
+      </div>
+      <div class="form-row" id="renewDateRow"><label>New End Date</label><input type="date" id="renewNewEndDate"></div>
+      <div class="modal-actions" style="justify-content:flex-start;">
+        <button type="button" onclick="logRenewal()">Log Decision</button>
+      </div>
+    `;
+  } else {
+    html += `<div class="note-banner" style="margin:0;">Only ${PGP.PERMISSIONS.contracts.join(", ")} can log a renewal decision. Logged in as ${PGP.getRole()}.</div>`;
+  }
+
+  html += `<div class="section-title">Renewal History</div>`;
+  html += c.renewals.length === 0
+    ? `<div class="empty-state" style="padding:10px;">No renewal decisions logged yet.</div>`
+    : c.renewals.map(r => `
+        <div class="history-item">
+          <strong>${PGP.escapeHtml(r.decision)}</strong>${r.new_end_date ? ` → new end date ${PGP.formatDate(r.new_end_date)}` : ''}<br>
+          Approved by ${PGP.escapeHtml(r.approved_by)} on ${PGP.formatDate(r.approval_date)}
+        </div>
+      `).join("");
+
+  html += `<div class="section-title">Amendment History</div>`;
+  html += c.amendments.length === 0
+    ? `<div class="empty-state" style="padding:10px;">No amendments recorded.</div>`
+    : c.amendments.map(a => `
+        <div class="history-item">
+          <strong>${PGP.escapeHtml(a.amendment_type.replace(/_/g, ' '))}</strong>: ${PGP.escapeHtml(a.old_value)} → ${PGP.escapeHtml(a.new_value)}<br>
+          Changed by ${PGP.escapeHtml(a.changed_by)} on ${PGP.formatDate(a.changed_at)}
+        </div>
+      `).join("");
+
+  document.getElementById("detailBody").innerHTML = html;
+}
+
+async function logRenewal() {
+  const decision = document.getElementById("renewDecision").value;
+  const newEndDate = document.getElementById("renewNewEndDate").value;
+  if (decision !== "Do Not Renew" && !newEndDate) { alert("Enter a new end date."); return; }
+
+  let updated;
+  try {
+    updated = await PGP.apiUpdate("contracts", currentId, { decision, new_end_date: newEndDate });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  const idx = ALL.findIndex(c => c.id === currentId);
+  if (idx !== -1) ALL[idx] = updated;
+  renderDetail();
+  applyFilters();
+}
+
+async function init() {
+  PGP.guardAddButton("contracts", document.getElementById("addBtn"));
+  await PGP.initConfig();
+  ALL = await PGP.apiList("contracts");
+  renderTable(ALL);
+
+  document.getElementById("searchBox").addEventListener("input", applyFilters);
+  document.getElementById("statusFilter").addEventListener("change", applyFilters);
+
+  document.getElementById("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const record = {
+      id: fd.get("id"),
+      title: fd.get("title"),
+      vendor: fd.get("vendor"),
+      category: fd.get("category"),
+      value: Number(fd.get("value")) || 0,
+      currency: "USD",
+      startDate: fd.get("startDate"),
+      endDate: fd.get("endDate"),
+      owner: fd.get("owner"),
+      criticality: fd.get("criticality")
+    };
+    try {
+      const created = await PGP.apiCreate("contracts", record);
+      ALL.push(created);
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    applyFilters();
+    PGP.closeModal("addModal");
+    e.target.reset();
+  });
+}
+PGP.initAuth().then(() => {
+  PGP.renderChrome("contracts.html");
+  init();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Users — Petrogas Procurement</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <div class="page-header">
+    <h1>Manage Users</h1>
+    <p>Create accounts and assign roles. Only Admins can see this page.</p>
+  </div>
+
+  <div id="deniedNote" class="note-banner" hidden>You're logged in as a non-Admin role, so this page is read-only for you — ask an Admin to make changes.</div>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="Search name or email...">
+    <button id="addBtn" onclick="PGP.openModal('addModal')">+ New User</button>
+  </div>
+
+  <div class="card">
+    <table id="userTable">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Template Admin</th><th>Created</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="modal-backdrop" id="addModal">
+  <div class="modal">
+    <h2>New User</h2>
+    <form id="addForm">
+      <div class="form-row"><label>Name</label><input type="text" name="name" required></div>
+      <div class="form-row"><label>Email</label><input type="email" name="email" required></div>
+      <div class="form-row">
+        <label>Role</label>
+        <select name="role" id="roleSelect"></select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="PGP.closeModal('addModal')">Cancel</button>
+        <button type="submit">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="tempPasswordModal">
+  <div class="modal">
+    <h2>User created</h2>
+    <p style="font-size:13px;color:var(--text-muted);">Share this temporary password with <strong id="tempPasswordName"></strong> — it's only shown once.</p>
+    <div class="temp-password" id="tempPasswordValue"></div>
+    <div class="modal-actions">
+      <button type="button" onclick="PGP.closeModal('tempPasswordModal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="editModal">
+  <div class="modal">
+    <h2>Edit User</h2>
+    <p style="font-size:13px;color:var(--text-muted);" id="editUserLabel"></p>
+    <div class="form-row">
+      <label>Role</label>
+      <select id="editRoleSelect"></select>
+    </div>
+    <div class="form-row">
+      <label>Status</label>
+      <select id="editStatusSelect">
+        <option value="active">Active</option>
+        <option value="disabled">Disabled</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label><input type="checkbox" id="editTemplateAdmin" style="width:auto;display:inline-block;margin-right:6px;"> Template Admin (can upload/archive Standard Templates, independent of role)</label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="PGP.closeModal('editModal')">Cancel</button>
+      <button type="button" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+let ALL = [];
+let editingId = null;
+
+function statusBadge(s) {
+  return `<span class="badge ${s === "active" ? "green" : "gray"}">${s === "active" ? "Active" : "Disabled"}</span>`;
+}
+
+// Vendor / Bidder is external and has no login of its own (see the clarification
+// portal), so it's excluded from the roles an Admin can assign here.
+const ASSIGNABLE_ROLES = PGP.ROLES.filter(r => r !== "Vendor / Bidder");
+
+function renderRoleOptions(selectEl, selected) {
+  selectEl.innerHTML = ASSIGNABLE_ROLES
+    .map(r => `<option value="${r}" ${r === selected ? "selected" : ""}>${r}</option>`)
+    .join("");
+}
+
+function renderTable(items) {
+  const tbody = document.querySelector("#userTable tbody");
+  const isAdmin = PGP.getRole() === "Admin";
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No users match your search.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map(u => `
+    <tr>
+      <td>${PGP.escapeHtml(u.name)}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${PGP.escapeHtml(u.email)}</td>
+      <td>${PGP.escapeHtml(u.role)}</td>
+      <td>${statusBadge(u.status)}</td>
+      <td>${u.template_admin ? '<span class="badge teal">Yes</span>' : '—'}</td>
+      <td>${PGP.formatDate(u.created_at)}</td>
+      <td>${isAdmin ? `<button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openEdit('${u.id}')">Edit</button>` : ""}</td>
+    </tr>
+  `).join("");
+}
+
+function applySearch() {
+  const q = document.getElementById("searchBox").value.toLowerCase();
+  renderTable(ALL.filter(u =>
+    u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+  ));
+}
+
+function openEdit(id) {
+  const u = ALL.find(x => x.id === id);
+  if (!u) return;
+  editingId = id;
+  document.getElementById("editUserLabel").textContent = `${u.name} · ${u.email}`;
+  renderRoleOptions(document.getElementById("editRoleSelect"), u.role);
+  document.getElementById("editStatusSelect").value = u.status;
+  document.getElementById("editTemplateAdmin").checked = !!u.template_admin;
+  PGP.openModal("editModal");
+}
+
+async function saveEdit() {
+  const role = document.getElementById("editRoleSelect").value;
+  const status = document.getElementById("editStatusSelect").value;
+  const template_admin = document.getElementById("editTemplateAdmin").checked;
+  const res = await fetch(`/api/users/${editingId}`, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, status, template_admin })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    alert(body.error || "Couldn't save changes.");
+    return;
+  }
+  const idx = ALL.findIndex(x => x.id === editingId);
+  if (idx !== -1) ALL[idx] = body.user;
+  applySearch();
+  PGP.closeModal("editModal");
+}
+
+async function loadUsers() {
+  const res = await fetch("/api/users", { credentials: "same-origin" });
+  if (!res.ok) {
+    document.getElementById("deniedNote").hidden = false;
+    document.getElementById("addBtn").disabled = true;
+    return;
+  }
+  const body = await res.json();
+  ALL = body.users;
+  applySearch();
+}
+
+async function init() {
+  const isAdmin = PGP.getRole() === "Admin";
+  if (!isAdmin) {
+    document.getElementById("deniedNote").hidden = false;
+    document.getElementById("addBtn").disabled = true;
+    document.getElementById("addBtn").title = "Admin access required.";
+  }
+  renderRoleOptions(document.getElementById("roleSelect"), "SME");
+  await loadUsers();
+
+  document.getElementById("searchBox").addEventListener("input", applySearch);
+
+  document.getElementById("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const res = await fetch("/api/users", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: fd.get("name"), email: fd.get("email"), role: fd.get("role") })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(body.error || "Couldn't create user.");
+      return;
+    }
+    PGP.closeModal("addModal");
+    e.target.reset();
+    document.getElementById("tempPasswordName").textContent = body.name;
+    document.getElementById("tempPasswordValue").textContent = body.tempPassword;
+    PGP.openModal("tempPasswordModal");
+    await loadUsers();
+  });
+}
+
+PGP.initAuth().then(() => {
+  PGP.renderChrome("admin-users.html");
+  init();
+});
+</script>
+</body>
+</html>

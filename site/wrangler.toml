@@ -1,0 +1,8 @@
+name = "petrogas-procurement"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "petrogas-procurement-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"

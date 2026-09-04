@@ -1,0 +1,97 @@
+[
+  {
+    "id": "TPL-001",
+    "name": "RFP - Goods Supply Standard Template",
+    "category": "RFP",
+    "documentNumber": "PGR-PRC-RFP-01",
+    "revision": "Revision-4",
+    "revisionDate": "2026-06-12",
+    "status": "Active",
+    "owner": "Legal / Contracts",
+    "uploadedBy": "Legal Team Member",
+    "usageLog": [
+      { "used_in_ref": "TND-2026-001", "used_at": "2026-07-01" },
+      { "used_in_ref": "TND-2026-002", "used_at": "2026-08-10" }
+    ]
+  },
+  {
+    "id": "TPL-002",
+    "name": "RFQ - Services Standard Template",
+    "category": "RFQ",
+    "documentNumber": "PGR-PRC-RFQ-01",
+    "revision": "Revision-3",
+    "revisionDate": "2026-05-20",
+    "status": "Active",
+    "owner": "Legal / Contracts",
+    "uploadedBy": "Legal Team Member",
+    "usageLog": []
+  },
+  {
+    "id": "TPL-003",
+    "name": "Standard Contract Terms - Goods",
+    "category": "Contract",
+    "documentNumber": "PGR-LEG-CON-06",
+    "revision": "Revision-5",
+    "revisionDate": "2026-07-01",
+    "status": "Active",
+    "owner": "Legal / Contracts",
+    "uploadedBy": "Legal Team Member",
+    "usageLog": [
+      { "used_in_ref": "TND-2026-001", "used_at": "2026-07-05" },
+      { "used_in_ref": "CTR-2201", "used_at": "2026-09-01" }
+    ]
+  },
+  {
+    "id": "TPL-004",
+    "name": "Non-Disclosure Agreement (NDA)",
+    "category": "NDA",
+    "documentNumber": "PGR-LEG-NDA-02",
+    "revision": "Revision-2",
+    "revisionDate": "2026-02-18",
+    "status": "Active",
+    "owner": "Legal / Contracts",
+    "uploadedBy": "Legal Team Member",
+    "usageLog": []
+  },
+  {
+    "id": "TPL-005",
+    "name": "Standard Contract Terms - Goods",
+    "category": "Contract",
+    "documentNumber": "PGR-LEG-CON-06",
+    "revision": "Revision-4",
+    "revisionDate": "2025-10-05",
+    "status": "Archived",
+    "owner": "Legal / Contracts",
+    "uploadedBy": "Legal Team Member",
+    "usageLog": [
+      { "used_in_ref": "TND-2025-047", "used_at": "2025-09-05" }
+    ]
+  },
+  {
+    "id": "TPL-006",
+    "name": "PO Terms & Conditions",
+    "category": "PO Terms",
+    "documentNumber": "PGR-PRC-POT-01",
+    "revision": "Revision-2",
+    "revisionDate": "2026-04-30",
+    "status": "Active",
+    "owner": "Category Manager",
+    "uploadedBy": "Legal Team Member",
+    "usageLog": []
+  },
+  {
+    "id": "TPL-007",
+    "name": "QHSE Pre-Qualification Questionnaire",
+    "category": "QHSE Questionnaire",
+    "documentNumber": "PGR-QHSE-OP-6.6",
+    "revision": "Revision-2",
+    "revisionDate": "2026-03-15",
+    "status": "Active",
+    "owner": "Legal / Contracts",
+    "uploadedBy": "Legal Team Member",
+    "usageLog": [
+      { "used_in_ref": "TND-2026-001", "used_at": "2026-07-18" },
+      { "used_in_ref": "TND-2025-047", "used_at": "2025-09-14" }
+    ]
+  }
+]

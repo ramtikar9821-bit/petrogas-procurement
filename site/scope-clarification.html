@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clarification — Petrogas Procurement</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .workflow-steps { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); margin: 10px 0 18px; }
+  .workflow-steps .step { display: flex; align-items: center; gap: 8px; }
+  .workflow-steps .step .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .workflow-steps .step.done .dot { background: var(--teal); }
+  .workflow-steps .step.done { color: var(--text); }
+  .response-item { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; background: #fafbfd; }
+  .response-item .meta { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .meta-strip { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin: 6px 0 14px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 8px 0; }
+  .checkbox-row input { margin: 0; }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="page-header">
+    <h1>Clarification</h1>
+    <p>Queries from internal stakeholders, bidders, or external authorities — assigned to a named internal owner, tracked against SLA. A response is private to whoever asked; nothing is ever broadcast to other bidders.</p>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="Search by tender ref, article ref, question, or originator...">
+    <button id="addBtn" onclick="PGP.openModal('addModal')">+ New Clarification</button>
+  </div>
+
+  <div class="card">
+    <table id="clarTable">
+      <thead>
+        <tr><th>ID</th><th>Tender Ref</th><th>Category</th><th>Originator</th><th>Question</th><th>Assigned To</th><th>SLA Due</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<!-- New clarification -->
+<div class="modal-backdrop" id="addModal">
+  <div class="modal">
+    <h2>New Clarification Request</h2>
+    <form id="addForm">
+      <div class="form-row"><label>Tender Reference</label><input type="text" name="tenderRef" placeholder="e.g. TND-2026-001" required></div>
+      <div class="form-row"><label>Article / Section Reference</label><input type="text" name="articleSectionRef" placeholder="e.g. Annex 3, Item 4.2"></div>
+      <div class="form-row">
+        <label>Category</label>
+        <select name="category" required>
+          <option value="Technical">Technical</option>
+          <option value="Commercial">Commercial</option>
+          <option value="HSE">HSE</option>
+          <option value="Legal">Legal</option>
+          <option value="Contractual">Contractual</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Originator Type</label>
+        <select name="originatorType" id="originatorType" required>
+          <option value="Internal Stakeholder">Internal Stakeholder</option>
+          <option value="Bidder">Bidder</option>
+          <option value="External Authority">External Authority</option>
+        </select>
+      </div>
+      <div class="form-row"><label id="originatorNameLabel">Originator Name</label><input type="text" name="originatorName" required></div>
+      <div class="form-row" id="externalAuthorityRow" hidden>
+        <label>External Authority</label>
+        <select name="externalAuthority" id="externalAuthority">
+          <option value="OQ">OQ</option>
+          <option value="PDO">PDO</option>
+          <option value="PGEP">PGEP</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-row" id="externalAuthorityOtherRow" hidden>
+        <label>External Authority Name (Other)</label>
+        <input type="text" name="externalAuthorityOtherName">
+      </div>
+      <div class="form-row"><label>Question</label><textarea name="question" required></textarea></div>
+      <div class="form-row"><label>Cost Impact</label>
+        <select name="costImpact">
+          <option value="N">No</option>
+          <option value="Y">Yes</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="PGP.closeModal('addModal')">Cancel</button>
+        <button type="submit">Log Request</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Detail / workflow -->
+<div class="modal-backdrop" id="detailModal">
+  <div class="modal" style="width:600px;">
+    <h2 id="detailTitle"></h2>
+    <div id="detailBody"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="PGP.closeModal('detailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+const STORAGE_KEY = "pgp_clarifications_full";
+const DEFAULT_SLA_DAYS = 5;
+const ESCALATE_TO = "Category Manager"; // default escalation target — see buildspec Section 9 open item
+
+// Default category -> department routing (admin-configurable in spirit — the
+// build spec flags its own sample mapping as inconsistent across rows and
+// says to treat this as a starting config, not a hard rule). Assignment is
+// to a named internal person, chosen freely by whoever routes it — this
+// only pre-suggests the department.
+const ROUTING_MATRIX = {
+  "Technical":   "Technical",
+  "Commercial":  "Commercial",
+  "HSE":         "HSE",
+  "Legal":       "Legal",
+  "Contractual": "Procurement/SCM"
+};
+
+const DEPARTMENTS = ["Technical", "Commercial", "Procurement/SCM", "HSE", "Legal", "Operations", "Management"];
+
+let ALL = [];
+let currentId = null;
+
+function isOverdue(item) {
+  if (!item.responseDueDate) return false;
+  if (item.status === "Answered" || item.status === "Closed") return false;
+  return PGP.daysUntil(item.responseDueDate) < 0;
+}
+
+// Derived escalation, per spec FR-SC-06 ("automatically escalate when the
+// response due date passes"). This prototype has no background job, so it's
+// computed whenever the list renders and persisted the first time it flips
+// true, mirroring what a real scheduled check would record.
+function checkEscalation(item) {
+  if (!item.escalated && isOverdue(item)) {
+    item.escalated = true;
+    item.escalatedAt = new Date().toISOString().slice(0, 10);
+    item.escalatedTo = ESCALATE_TO;
+    return true;
+  }
+  return false;
+}
+
+function statusBadge(item) {
+  if (isOverdue(item)) return `<span class="badge red">Overdue · ${item.status}</span>`;
+  const map = { "Open": "gray", "Routed": "teal", "In Review": "teal", "Answered": "amber", "Closed": "green" };
+  return `<span class="badge ${map[item.status] || 'gray'}">${item.status}</span>`;
+}
+
+function assignedBadge(item) {
+  if (!item.assignedPerson) return `<span style="color:var(--text-muted);">Not assigned yet</span>`;
+  return `${PGP.escapeHtml(item.assignedPerson)} <span class="badge gray">${PGP.escapeHtml(item.assignedDepartment || "—")}</span>`;
+}
+
+function renderTable(items) {
+  let anyEscalated = false;
+  items.forEach(item => { if (checkEscalation(item)) anyEscalated = true; });
+  if (anyEscalated) save();
+
+  const tbody = document.querySelector("#clarTable tbody");
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No clarification requests match.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map(c => `
+    <tr>
+      <td>${PGP.escapeHtml(c.id)}</td>
+      <td>${PGP.escapeHtml(c.tenderRef)}</td>
+      <td><span class="badge gray">${PGP.escapeHtml(c.category || "—")}</span></td>
+      <td>${PGP.escapeHtml(c.originatorName)} <span class="badge gray">${PGP.escapeHtml(c.originatorType)}</span></td>
+      <td style="max-width:220px;">${PGP.escapeHtml(c.question)}</td>
+      <td>${assignedBadge(c)}</td>
+      <td>${c.responseDueDate ? PGP.formatDate(c.responseDueDate) : "—"}</td>
+      <td>${statusBadge(c)}</td>
+      <td><button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${c.id}')">View / Action</button></td>
+    </tr>
+  `).join("");
+}
+
+function save() {
+  PGP.saveFullList(STORAGE_KEY, ALL);
+}
+
+function findItem(id) {
+  return ALL.find(c => c.id === id);
+}
+
+function openDetail(id) {
+  currentId = id;
+  renderDetail();
+  PGP.openModal("detailModal");
+}
+
+// Who's allowed to answer: the specific person it was assigned to (matched by
+// the logged-in user's name — this prototype has no separate "assignee"
+// account link), or anyone with the routing permission, as an admin override.
+function canRespond(item) {
+  if (!item.assignedPerson) return false;
+  if (item.status === "Answered" || item.status === "Closed") return false;
+  const user = PGP.getUser();
+  const nameMatch = user && user.name && user.name.trim().toLowerCase() === item.assignedPerson.trim().toLowerCase();
+  return nameMatch || PGP.hasPermission("clarificationsRoute");
+}
+
+function renderDetail() {
+  const item = findItem(currentId);
+  if (!item) return;
+  const role = PGP.getRole();
+  const canRoute = PGP.hasPermission("clarificationsRoute");
+  const external = item.originatorType !== "Internal Stakeholder";
+
+  document.getElementById("detailTitle").textContent = `${item.id} — ${item.tenderRef}`;
+
+  const originatorLabel = item.originatorType === "External Authority"
+    ? `${item.originatorName} (${item.externalAuthority === "Other" ? item.externalAuthorityOtherName : item.externalAuthority})`
+    : item.originatorName;
+
+  const steps = [
+    { label: `Submitted by ${originatorLabel} (${item.originatorType}) on ${PGP.formatDate(item.submittedOn)}`, done: true },
+    { label: item.assignedPerson ? `Assigned to ${item.assignedPerson} (${item.assignedDepartment}) on ${PGP.formatDate(item.assignedOn)} — SLA ${item.slaDays} day(s)` : "Assigned to a department/person", done: !!item.assignedPerson },
+    { label: item.responses.length ? `Answered on ${PGP.formatDate(item.responses[0].respondedOn)}` : "Answered", done: item.status === "Answered" || item.status === "Closed" },
+    { label: "Closed — response stays private to the originator", done: item.status === "Closed" }
+  ];
+  if (item.escalated) {
+    steps.push({ label: `Escalated to ${item.escalatedTo} on ${PGP.formatDate(item.escalatedAt)} (SLA breached)`, done: true });
+  }
+
+  let html = `
+    <div class="meta-strip">
+      <div>Article/Section: <strong style="color:var(--text);">${PGP.escapeHtml(item.articleSectionRef || "—")}</strong></div>
+      <div>Category: <strong style="color:var(--text);">${PGP.escapeHtml(item.category || "—")}</strong></div>
+      <div>Cost Impact: <strong style="color:var(--text);">${item.costImpact === "Y" ? "Yes" : "No"}</strong></div>
+    </div>
+    <p style="font-size:14px;">${PGP.escapeHtml(item.question)}</p>
+    <div class="workflow-steps">
+      ${steps.map(s => `<div class="step ${s.done ? 'done' : ''}"><span class="dot"></span>${PGP.escapeHtml(s.label)}</div>`).join("")}
+    </div>
+  `;
+
+  // Assignment panel — visible while not yet answered/closed
+  if (item.status === "Open" || item.status === "Routed" || item.status === "In Review") {
+    html += `<div class="section-title">${item.assignedPerson ? "Re-assign" : "Assign"}</div>`;
+    if (canRoute) {
+      const suggestedDept = ROUTING_MATRIX[item.category] || "";
+      html += `
+        <div class="form-row">
+          <label>Department</label>
+          <select id="assignDept">
+            ${DEPARTMENTS.map(d => `<option value="${d}" ${(item.assignedDepartment || suggestedDept) === d ? "selected" : ""}>${d}</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-row"><label>Assigned Person</label><input type="text" id="assignPerson" value="${PGP.escapeHtml(item.assignedPerson || "")}" placeholder="Name of the internal staff member who will answer"></div>
+        <div class="form-row"><label>SLA (days)</label><input type="number" id="assignSla" min="1" value="${item.slaDays || DEFAULT_SLA_DAYS}"></div>
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:0;">
+          <button type="button" onclick="submitAssignment()">${item.assignedPerson ? "Update Assignment" : "Assign"}</button>
+        </div>
+      `;
+    } else {
+      html += `<div class="note-banner" style="margin:0;">Only ${PGP.PERMISSIONS.clarificationsRoute.join(", ")} can assign this request. Logged in as ${role}.</div>`;
+    }
+  }
+
+  // Response panel
+  html += `<div class="section-title">Response</div>`;
+  if (item.responses.length === 0) {
+    html += `<div class="empty-state" style="padding:14px;">No response yet.</div>`;
+  } else {
+    html += item.responses.map(r => `
+      <div class="response-item">
+        <div class="meta">${PGP.escapeHtml(r.respondedBy)} · ${PGP.formatDate(r.respondedOn)} · ${PGP.escapeHtml(r.deliveryMethod)}${r.deliveryMethod !== "In-system notification" ? (r.sentConfirmed ? " · sent ✓" : " · not yet sent") : ""}</div>
+        <div>${PGP.escapeHtml(r.text)}</div>
+      </div>
+    `).join("");
+  }
+
+  if (canRespond(item)) {
+    html += `
+      <div class="form-row" style="margin-top:10px;">
+        <label>Response</label>
+        <textarea id="responseText" placeholder="This answer is only ever seen by ${PGP.escapeHtml(originatorLabel)} — it is never shared with any other bidder or party."></textarea>
+      </div>
+      ${external ? `
+        <div class="checkbox-row">
+          <input type="checkbox" id="responseSent">
+          <label for="responseSent" style="font-weight:400;">I have sent this response to ${PGP.escapeHtml(originatorLabel)} by email (${item.originatorType} has no system access).</label>
+        </div>
+      ` : `<p style="font-size:12px;color:var(--text-muted);">${PGP.escapeHtml(originatorLabel)} is an internal stakeholder — they'll get an in-system notification, no email needed.</p>`}
+      <div class="modal-actions" style="justify-content:flex-start;">
+        <button type="button" onclick="submitResponse()">Submit Response</button>
+      </div>
+    `;
+  } else if (item.assignedPerson && item.status !== "Closed" && item.status !== "Answered") {
+    html += `<div class="note-banner">Logged in as ${role}. Awaiting response from ${item.assignedPerson}.</div>`;
+  }
+
+  // Close action — no publish/broadcast step; this just resolves the record.
+  if (item.status === "Answered") {
+    html += `<div class="section-title">Close</div>`;
+    if (canRoute) {
+      html += `<p style="font-size:13px;color:var(--text-muted);">This response is only visible to ${PGP.escapeHtml(originatorLabel)} — closing marks it resolved. It is never shared with any other bidder or party.</p>
+        <div class="modal-actions" style="justify-content:flex-start;">
+          <button type="button" onclick="closeClarification()">Close</button>
+        </div>`;
+    } else {
+      html += `<div class="note-banner" style="margin:0;">Only ${PGP.PERMISSIONS.clarificationsRoute.join(", ")} can close this request. Logged in as ${role}.</div>`;
+    }
+  }
+
+  document.getElementById("detailBody").innerHTML = html;
+}
+
+function submitAssignment() {
+  const item = findItem(currentId);
+  const department = document.getElementById("assignDept").value;
+  const person = document.getElementById("assignPerson").value.trim();
+  const slaDays = Math.max(1, parseInt(document.getElementById("assignSla").value, 10) || DEFAULT_SLA_DAYS);
+  if (!person) { alert("Enter the name of the person this is assigned to."); return; }
+
+  item.assignedDepartment = department;
+  item.assignedPerson = person;
+  item.assignedBy = PGP.getRole();
+  item.assignedOn = new Date().toISOString().slice(0, 10);
+  item.slaDays = slaDays;
+  const due = new Date();
+  due.setDate(due.getDate() + slaDays);
+  item.responseDueDate = due.toISOString().slice(0, 10);
+  item.status = item.responses.length > 0 ? "In Review" : "Routed";
+  save();
+  renderDetail();
+  renderTable(ALL);
+}
+
+function submitResponse() {
+  const item = findItem(currentId);
+  const text = document.getElementById("responseText").value.trim();
+  if (!text) { alert("Enter a response before submitting."); return; }
+  const external = item.originatorType !== "Internal Stakeholder";
+  const sentCheckbox = document.getElementById("responseSent");
+  if (external && !(sentCheckbox && sentCheckbox.checked)) {
+    alert("Confirm you've sent this response by email before submitting — " + item.originatorType + " has no system access.");
+    return;
+  }
+  const user = PGP.getUser();
+  item.responses.push({
+    respondedBy: (user && user.name) || PGP.getRole(),
+    text,
+    respondedOn: new Date().toISOString().slice(0, 10),
+    deliveryMethod: external ? "Email sent externally" : "In-system notification",
+    sentConfirmed: external ? true : null
+  });
+  item.status = "Answered";
+  save();
+  renderDetail();
+  renderTable(ALL);
+}
+
+function closeClarification() {
+  const item = findItem(currentId);
+  item.status = "Closed";
+  save();
+  renderDetail();
+  renderTable(ALL);
+}
+
+function applySearch() {
+  const q = document.getElementById("searchBox").value.toLowerCase();
+  renderTable(ALL.filter(c =>
+    c.tenderRef.toLowerCase().includes(q) ||
+    (c.articleSectionRef || "").toLowerCase().includes(q) ||
+    c.question.toLowerCase().includes(q) ||
+    c.originatorName.toLowerCase().includes(q)
+  ));
+}
+
+function updateOriginatorFields() {
+  const type = document.getElementById("originatorType").value;
+  const isExternalAuthority = type === "External Authority";
+  document.getElementById("externalAuthorityRow").hidden = !isExternalAuthority;
+  document.getElementById("originatorNameLabel").textContent =
+    type === "Bidder" ? "Bidder Name" : (isExternalAuthority ? "Contact Name" : "Internal Stakeholder Name");
+  updateExternalAuthorityOtherField();
+}
+
+function updateExternalAuthorityOtherField() {
+  const type = document.getElementById("originatorType").value;
+  const authority = document.getElementById("externalAuthority").value;
+  document.getElementById("externalAuthorityOtherRow").hidden = !(type === "External Authority" && authority === "Other");
+}
+
+async function init() {
+  PGP.guardAddButton("clarifications", document.getElementById("addBtn"));
+  ALL = await PGP.loadFullList("data/clarifications.json", STORAGE_KEY);
+  renderTable(ALL);
+
+  document.getElementById("searchBox").addEventListener("input", applySearch);
+  document.getElementById("originatorType").addEventListener("change", updateOriginatorFields);
+  document.getElementById("externalAuthority").addEventListener("change", updateExternalAuthorityOtherField);
+  updateOriginatorFields();
+
+  document.getElementById("addForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const originatorType = fd.get("originatorType");
+    const record = {
+      id: "CLR-" + Math.floor(1000 + Math.random() * 9000),
+      tenderRef: fd.get("tenderRef"),
+      articleSectionRef: fd.get("articleSectionRef"),
+      category: fd.get("category"),
+      costImpact: fd.get("costImpact"),
+      question: fd.get("question"),
+      originatorType,
+      originatorName: fd.get("originatorName"),
+      externalAuthority: originatorType === "External Authority" ? fd.get("externalAuthority") : "",
+      externalAuthorityOtherName: originatorType === "External Authority" && fd.get("externalAuthority") === "Other" ? fd.get("externalAuthorityOtherName") : "",
+      loggedBy: PGP.getRole(),
+      submittedOn: new Date().toISOString().slice(0, 10),
+      status: "Open",
+      assignedDepartment: "",
+      assignedPerson: "",
+      assignedBy: "",
+      assignedOn: "",
+      slaDays: null,
+      responseDueDate: "",
+      responses: [],
+      escalated: false,
+      escalatedAt: "",
+      escalatedTo: ""
+    };
+    ALL.push(record);
+    save();
+    renderTable(ALL);
+    PGP.closeModal("addModal");
+    e.target.reset();
+    updateOriginatorFields();
+  });
+}
+PGP.initAuth().then(() => {
+  PGP.renderChrome("scope-clarification.html");
+  init();
+});
+</script>
+</body>
+</html>

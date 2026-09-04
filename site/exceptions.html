@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exception &amp; Clause Register — Petrogas Procurement</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .wording-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0 16px; }
+  .wording-box { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 13px; background: #fafbfd; }
+  .wording-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; }
+  .precedent-list { margin-top: 8px; }
+  .precedent-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; background: #fafbfd; }
+  .precedent-item.eligible { background: #e4f5ea; border-color: var(--green); }
+  .status-pair { display: flex; gap: 6px; flex-wrap: wrap; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .round-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; background: #fafbfd; }
+  .round-item .meta { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .path-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .path-badge.fast { background: #fdf3dc; color: var(--amber); }
+  .path-badge.full { background: #eef4fb; color: var(--navy-light); }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="page-header">
+    <h1>Approved Exception &amp; Clause Register</h1>
+    <p>Fast-track reuse of a Legal-consented precedent (2-day Legal objection window), or a full multi-round negotiation relayed via Contract Engineer. Original vs. proposed wording tracked with independent approval and negotiation status, searchable cross-tender for precedent.</p>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="Search clause ref, tender, bidder, or wording...">
+    <button id="addBtn" onclick="openAddModal()">+ New Exception Request</button>
+  </div>
+
+  <div class="card">
+    <table id="excTable">
+      <thead>
+        <tr><th>ID</th><th>Tender</th><th>Bidder</th><th>Clause Ref</th><th>Path</th><th>Approval</th><th>Negotiation</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<!-- New exception -->
+<div class="modal-backdrop" id="addModal">
+  <div class="modal" style="width:580px;">
+    <h2>New Exception Request</h2>
+    <form id="addForm">
+      <div class="form-row"><label>Tender Reference</label><input type="text" name="tender_number" id="tenderNumberInput" placeholder="e.g. TND-2026-001" required></div>
+      <div class="form-row"><label>Bidder</label><input type="text" name="bidder_name" required></div>
+      <div class="form-row"><label>Contract Document</label>
+        <select name="contract_document_ref">
+          <option>Main body of contract</option>
+          <option>Annex 6 (Prices and Rates)</option>
+          <option>Other Annex</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Clause / Article Reference</label>
+        <input type="text" name="clause_article_ref" id="clauseRefInput" placeholder="e.g. 10.7" required>
+        <div id="precedentResults" class="precedent-list"></div>
+      </div>
+      <div class="form-row"><label>Original Clause Wording (standard T&amp;Cs)</label><textarea name="original_clause_wording" required></textarea></div>
+      <div class="form-row"><label>Initial Proposed Wording (bidder's opening ask)</label><textarea name="initial_proposed_wording" required></textarea></div>
+      <input type="hidden" name="referenced_precedent_id" id="referencedPrecedentId">
+      <div id="fastTrackNote" class="note-banner" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="PGP.closeModal('addModal')">Cancel</button>
+        <button type="submit" id="submitBtn">Submit Request (Full Review)</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Detail / decision -->
+<div class="modal-backdrop" id="detailModal">
+  <div class="modal" style="width:620px;">
+    <h2 id="detailTitle"></h2>
+    <div id="detailBody"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="PGP.closeModal('detailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+const STORAGE_KEY = "pgp_exceptions_full";
+const FAST_TRACK_WINDOW_DAYS = 2; // configurable — see buildspec Section 5
+
+// Legal is the only actor who can object to a fast-track, or act as the
+// "Legal" side of a full-review negotiation round.
+const LEGAL_ROLES = ["Legal Team Member", "HOD Legal"];
+
+let ALL = [];
+let TENDERS = [];
+let currentId = null;
+let selectedPrecedentId = null;
+
+function isLegal() { return LEGAL_ROLES.includes(PGP.getRole()); }
+
+function approvalBadge(status) {
+  const map = { "Accepted": "green", "Rejected": "red", "Countered": "amber", "Pending": "teal" };
+  return `<span class="badge ${map[status] || 'gray'}">${PGP.escapeHtml(status)}</span>`;
+}
+
+function negotiationBadge(status) {
+  return `<span class="badge ${status === 'Closed' ? 'gray' : 'teal'}">${PGP.escapeHtml(status)}</span>`;
+}
+
+function pathBadge(e) {
+  return e.is_fast_track
+    ? `<span class="path-badge fast">Fast-track</span>`
+    : `<span class="path-badge full">Full review</span>`;
+}
+
+function findItem(id) { return ALL.find(e => e.id === id); }
+function save() { PGP.saveFullList(STORAGE_KEY, ALL); }
+
+// Precedent-matching rule (buildspec Section 5): a stored entry is a usable
+// fast-track precedent for a new request only if Legal has given consent,
+// the clause matches, and the reuse scope covers this new request.
+function isEligiblePrecedent(precedent, newRequest) {
+  if (!precedent.legal_consent_given) return false;
+  if (precedent.clause_article_ref.toLowerCase() !== newRequest.clause_article_ref.toLowerCase()) return false;
+  if (precedent.reuse_scope === "Any Bidder") return true;
+  if (precedent.reuse_scope === "Same Tender Category") return precedent.tender_category && precedent.tender_category === newRequest.tender_category;
+  if (precedent.reuse_scope === "Same Bidder Only") return precedent.bidder_name && precedent.bidder_name === newRequest.bidder_name;
+  return false;
+}
+
+// Auto-resolves a pending fast-track once its objection window has passed
+// with no Legal objection (buildspec: "if Legal takes no action within 2
+// days, system auto-sets approval_status=Accepted"). This prototype has no
+// background job, so it's applied whenever the list/detail renders.
+function checkFastTrackAutoApprove(item) {
+  if (!item.is_fast_track || item.fast_track_legal_objected) return false;
+  if (item.approval_status !== "Pending") return false;
+  if (!item.fast_track_auto_approve_deadline) return false;
+  if (PGP.daysUntil(item.fast_track_auto_approve_deadline) >= 0) return false;
+  item.approval_status = "Accepted";
+  item.approved_by = "System (auto-approved)";
+  item.approval_date = new Date().toISOString().slice(0, 10);
+  return true;
+}
+
+function renderTable(items) {
+  let anyAutoApproved = false;
+  items.forEach(item => { if (checkFastTrackAutoApprove(item)) anyAutoApproved = true; });
+  if (anyAutoApproved) save();
+
+  const tbody = document.querySelector("#excTable tbody");
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No exceptions match your search.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map(e => `
+    <tr>
+      <td>${PGP.escapeHtml(e.id)}</td>
+      <td>${PGP.escapeHtml(e.tender_number)}</td>
+      <td>${PGP.escapeHtml(e.bidder_name)}</td>
+      <td>${PGP.escapeHtml(e.clause_article_ref)}</td>
+      <td>${pathBadge(e)}</td>
+      <td>${approvalBadge(e.approval_status)}</td>
+      <td>${negotiationBadge(e.negotiation_status)}</td>
+      <td><button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${e.id}')">View</button></td>
+    </tr>
+  `).join("");
+}
+
+function applySearch() {
+  const q = document.getElementById("searchBox").value.toLowerCase();
+  renderTable(ALL.filter(e =>
+    e.clause_article_ref.toLowerCase().includes(q) ||
+    e.tender_number.toLowerCase().includes(q) ||
+    e.bidder_name.toLowerCase().includes(q) ||
+    e.original_clause_wording.toLowerCase().includes(q) ||
+    e.initial_proposed_wording.toLowerCase().includes(q)
+  ));
+}
+
+function openDetail(id) {
+  currentId = id;
+  renderDetail();
+  PGP.openModal("detailModal");
+}
+
+function renderDetail() {
+  const e = findItem(currentId);
+  if (!e) return;
+  const canDecide = PGP.hasPermission("exceptionsDecide");
+  document.getElementById("detailTitle").textContent = `${e.id} — ${e.clause_article_ref}`;
+
+  let html = `
+    <div class="meta-strip" style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+      <div>Tender: <strong style="color:var(--text);">${PGP.escapeHtml(e.tender_number)}</strong> ${e.tender_title ? '— ' + PGP.escapeHtml(e.tender_title) : ''}</div>
+      <div>Bidder: <strong style="color:var(--text);">${PGP.escapeHtml(e.bidder_name)}</strong></div>
+      <div>Document: <strong style="color:var(--text);">${PGP.escapeHtml(e.contract_document_ref)}</strong></div>
+      <div>Logged by: <strong style="color:var(--text);">${PGP.escapeHtml(e.loggedBy || '—')}</strong></div>
+      <div>Path: ${pathBadge(e)}</div>
+    </div>
+    <div class="wording-cols">
+      <div class="wording-box"><div class="label">Original (Standard T&amp;Cs)</div>${PGP.escapeHtml(e.original_clause_wording)}</div>
+      <div class="wording-box"><div class="label">Initial Proposed (Bidder)</div>${PGP.escapeHtml(e.initial_proposed_wording)}</div>
+    </div>
+    <div class="section-title">Status</div>
+    <div class="status-pair" style="margin-bottom:12px;">${approvalBadge(e.approval_status)} ${negotiationBadge(e.negotiation_status)}</div>
+  `;
+
+  // --- Fast-track panel ---
+  if (e.is_fast_track && !e.fast_track_legal_objected) {
+    const daysLeft = PGP.daysUntil(e.fast_track_auto_approve_deadline);
+    html += `<div class="section-title">Fast-Track Reuse</div>`;
+    html += `<p style="font-size:13px;">Referencing precedent <strong>${PGP.escapeHtml(e.referenced_precedent_id || '—')}</strong>. Legal notified ${PGP.formatDate(e.fast_track_legal_notified_at)}.</p>`;
+    if (e.approval_status === "Pending") {
+      html += daysLeft >= 0
+        ? `<p style="font-size:13px;color:var(--text-muted);">Auto-approves on ${PGP.formatDate(e.fast_track_auto_approve_deadline)} (${daysLeft} day(s) left) unless Legal objects.</p>`
+        : `<p style="font-size:13px;color:var(--text-muted);">Objection window has passed — this will auto-approve next time the register is opened.</p>`;
+      if (isLegal()) {
+        html += `<div class="modal-actions" style="justify-content:flex-start;">
+          <button type="button" class="secondary" onclick="objectToFastTrack()">Object — send to full Legal review</button>
+        </div>`;
+      } else {
+        html += `<div class="note-banner" style="margin:0;">Only ${LEGAL_ROLES.join(", ")} can object to a fast-track reuse. Logged in as ${PGP.getRole()}.</div>`;
+      }
+    } else {
+      html += `<p style="font-size:13px;color:var(--green);">${e.approval_status === "Accepted" ? "Approved" : e.approval_status} — ${PGP.escapeHtml(e.approved_by || '')} on ${PGP.formatDate(e.approval_date)}.</p>`;
+    }
+  }
+
+  // --- Full-review negotiation panel ---
+  if (!e.is_fast_track || e.fast_track_legal_objected) {
+    html += `<div class="section-title">Negotiation Rounds</div>`;
+    if (e.fast_track_legal_objected) {
+      html += `<div class="note-banner" style="margin-bottom:10px;">Legal objected to fast-track reuse — converted to full review.</div>`;
+    }
+    if (e.negotiation_rounds.length === 0) {
+      html += `<div class="empty-state" style="padding:10px;">No negotiation rounds logged yet.</div>`;
+    } else {
+      html += e.negotiation_rounds.map(r => `
+        <div class="round-item">
+          <div class="meta">Round ${r.round_no} · proposed by ${r.proposed_by} · ${PGP.formatDate(r.date)} · logged by ${PGP.escapeHtml(r.communicated_by)}</div>
+          <div>${PGP.escapeHtml(r.wording_text)}</div>
+        </div>
+      `).join("");
+    }
+    if (e.negotiation_status === "Open" && (PGP.hasPermission("exceptions") || isLegal())) {
+      html += `
+        <div class="form-row">
+          <label>Add Round — Proposed By</label>
+          <select id="roundProposedBy">
+            <option value="Legal" ${!isLegal() ? "" : "selected"}>Legal</option>
+            <option value="Bidder">Bidder (relayed by Contract Engineer)</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Wording</label><textarea id="roundWording" placeholder="Legal's proposed wording, or the bidder's reply as relayed by Contract Engineer..."></textarea></div>
+        <div class="modal-actions" style="justify-content:flex-start;">
+          <button type="button" onclick="addNegotiationRound()">Log Round</button>
+        </div>
+      `;
+    }
+  }
+
+  // --- Approval decision panel ---
+  html += `<div class="section-title">Decision</div>`;
+  if (canDecide) {
+    html += `
+      <div class="form-row">
+        <label>Approval Status</label>
+        <select onchange="updateApproval(this.value)">
+          ${["Pending", "Accepted", "Rejected", "Countered"].map(s => `<option value="${s}" ${e.approval_status === s ? 'selected' : ''}>${s}</option>`).join("")}
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Negotiation Status</label>
+        <select onchange="updateNegotiation(this.value)">
+          <option value="Open" ${e.negotiation_status === 'Open' ? 'selected' : ''}>Open</option>
+          <option value="Closed" ${e.negotiation_status === 'Closed' ? 'selected' : ''}>Closed</option>
+        </select>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);">Approving authority and date are recorded automatically as ${PGP.getRole()} / today when the approval status changes.</p>
+    `;
+  } else {
+    html += `<div class="note-banner" style="margin:0;">Only ${PGP.PERMISSIONS.exceptionsDecide.join(", ")} can record a decision. Logged in as ${PGP.getRole()}.</div>`;
+  }
+
+  if (e.approved_by) {
+    html += `<p style="font-size:13px;margin-top:12px;">Decided by <strong>${PGP.escapeHtml(e.approved_by)}</strong> on ${PGP.formatDate(e.approval_date)}.</p>`;
+  }
+
+  // --- Legal consent / reuse scope (only meaningful once accepted, and only
+  // for entries that could themselves become a future precedent — a
+  // fast-track entry is already reusing someone else's consent) ---
+  if (e.approval_status === "Accepted" && !e.is_fast_track) {
+    html += `<div class="section-title">Reuse as Future Precedent</div>`;
+    if (isLegal()) {
+      html += `
+        <div class="form-row">
+          <label><input type="checkbox" id="legalConsentCheckbox" ${e.legal_consent_given ? "checked" : ""} onchange="toggleLegalConsent(this.checked)" style="width:auto;margin-right:6px;">
+            Legal consents to this wording being reused as precedent</label>
+        </div>
+      `;
+      if (e.legal_consent_given) {
+        html += `
+          <div class="form-row">
+            <label>Reuse Scope</label>
+            <select onchange="setReuseScope(this.value)">
+              ${["Any Bidder", "Same Bidder Only", "Same Tender Category"].map(s => `<option value="${s}" ${e.reuse_scope === s ? 'selected' : ''}>${s}</option>`).join("")}
+            </select>
+          </div>
+        `;
+      }
+    } else if (e.legal_consent_given) {
+      html += `<p style="font-size:13px;">Legal consent given ${PGP.formatDate(e.legal_consent_date)} — reuse scope: <strong>${PGP.escapeHtml(e.reuse_scope || '—')}</strong>.</p>`;
+    } else {
+      html += `<div class="note-banner" style="margin:0;">Only ${LEGAL_ROLES.join(", ")} can grant reuse consent. Logged in as ${PGP.getRole()}.</div>`;
+    }
+  }
+
+  document.getElementById("detailBody").innerHTML = html;
+}
+
+function updateApproval(value) {
+  const e = findItem(currentId);
+  e.approval_status = value;
+  if (value !== "Pending") {
+    e.approved_by = PGP.getRole();
+    e.approval_date = new Date().toISOString().slice(0, 10);
+  } else {
+    e.approved_by = "";
+    e.approval_date = "";
+  }
+  save();
+  renderDetail();
+  renderTable(ALL);
+}
+
+function updateNegotiation(value) {
+  findItem(currentId).negotiation_status = value;
+  save();
+  renderDetail();
+  renderTable(ALL);
+}
+
+function objectToFastTrack() {
+  const e = findItem(currentId);
+  e.fast_track_legal_objected = true;
+  e.is_fast_track = false;
+  e.negotiation_status = "Open";
+  save();
+  renderDetail();
+  renderTable(ALL);
+}
+
+function addNegotiationRound() {
+  const e = findItem(currentId);
+  const proposedBy = document.getElementById("roundProposedBy").value;
+  const wording = document.getElementById("roundWording").value.trim();
+  if (!wording) { alert("Enter the wording for this round."); return; }
+  e.negotiation_rounds.push({
+    round_no: e.negotiation_rounds.length + 1,
+    proposed_by: proposedBy,
+    wording_text: wording,
+    date: new Date().toISOString().slice(0, 10),
+    communicated_by: PGP.getRole()
+  });
+  save();
+  renderDetail();
+  renderTable(ALL);
+}
+
+function toggleLegalConsent(checked) {
+  const e = findItem(currentId);
+  e.legal_consent_given = checked;
+  e.legal_consent_date = checked ? new Date().toISOString().slice(0, 10) : "";
+  // Keep the stored value in sync with what the scope dropdown will visually
+  // default to, so an unset value never looks selected without actually being set.
+  e.reuse_scope = checked ? (e.reuse_scope || "Any Bidder") : null;
+  save();
+  renderDetail();
+}
+
+function setReuseScope(value) {
+  const e = findItem(currentId);
+  e.reuse_scope = value;
+  save();
+  renderDetail();
+}
+
+// --- New request / precedent search ---
+
+function openAddModal() {
+  document.getElementById("addForm").reset();
+  document.getElementById("precedentResults").innerHTML = "";
+  document.getElementById("fastTrackNote").hidden = true;
+  document.getElementById("submitBtn").textContent = "Submit Request (Full Review)";
+  selectedPrecedentId = null;
+  PGP.openModal("addModal");
+}
+
+function currentDraft() {
+  return {
+    clause_article_ref: document.getElementById("clauseRefInput").value.trim(),
+    tender_category: (TENDERS.find(t => t.tender_number === document.getElementById("tenderNumberInput").value.trim()) || {}).category || "",
+    bidder_name: document.querySelector('#addForm [name="bidder_name"]').value.trim()
+  };
+}
+
+function renderPrecedent() {
+  const draft = currentDraft();
+  const box = document.getElementById("precedentResults");
+  selectedPrecedentId = null;
+  document.getElementById("fastTrackNote").hidden = true;
+  document.getElementById("submitBtn").textContent = "Submit Request (Full Review)";
+  if (!draft.clause_article_ref) { box.innerHTML = ""; return; }
+
+  const matches = ALL.filter(e => e.clause_article_ref.toLowerCase() === draft.clause_article_ref.toLowerCase());
+  if (matches.length === 0) { box.innerHTML = ""; return; }
+
+  const eligible = matches.filter(m => isEligiblePrecedent(m, draft));
+  const historical = matches.filter(m => !eligible.includes(m));
+
+  let html = "";
+  if (eligible.length) {
+    html += `<div style="font-size:11px;color:var(--green);font-weight:600;margin:4px 0;">${eligible.length} eligible for fast-track reuse (Legal-consented, in scope):</div>`;
+    html += eligible.map(m => `
+      <div class="precedent-item eligible">
+        <strong>${PGP.escapeHtml(m.clause_article_ref)}</strong> · ${PGP.escapeHtml(m.tender_number)} · ${approvalBadge(m.approval_status)} · scope: ${PGP.escapeHtml(m.reuse_scope)}<br>
+        ${PGP.escapeHtml(m.initial_proposed_wording)}
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:6px;">
+          <button type="button" style="padding:6px 10px;font-size:12px;" onclick="usePrecedent('${m.id}')">Use this precedent (fast-track)</button>
+        </div>
+      </div>
+    `).join("");
+  }
+  if (historical.length) {
+    html += `<div style="font-size:11px;color:var(--text-muted);margin:8px 0 4px;">${historical.length} other historical entry(ies) on this clause (reference only, not fast-track eligible):</div>`;
+    html += historical.map(m => `
+      <div class="precedent-item">
+        <strong>${PGP.escapeHtml(m.clause_article_ref)}</strong> · ${PGP.escapeHtml(m.tender_number)} · ${approvalBadge(m.approval_status)}<br>
+        ${PGP.escapeHtml(m.initial_proposed_wording)}
+      </div>
+    `).join("");
+  }
+  box.innerHTML = html;
+}
+
+function usePrecedent(precedentId) {
+  selectedPrecedentId = precedentId;
+  document.getElementById("referencedPrecedentId").value = precedentId;
+  const note = document.getElementById("fastTrackNote");
+  note.hidden = false;
+  note.textContent = `This request will be logged as fast-track, referencing ${precedentId}. Legal will be notified with a ${FAST_TRACK_WINDOW_DAYS}-day objection window; it auto-approves if Legal doesn't object.`;
+  document.getElementById("submitBtn").textContent = "Submit Request (Fast-Track)";
+}
+
+async function init() {
+  PGP.guardAddButton("exceptions", document.getElementById("addBtn"));
+
+  const [exceptionsData, tendersData] = await Promise.all([
+    PGP.loadFullList("data/exceptions.json", STORAGE_KEY),
+    PGP.loadFullList("data/tenders.json", "pgp_tenders_full")
+  ]);
+  ALL = exceptionsData;
+  TENDERS = tendersData;
+  renderTable(ALL);
+
+  document.getElementById("searchBox").addEventListener("input", applySearch);
+  document.getElementById("clauseRefInput").addEventListener("input", renderPrecedent);
+  document.getElementById("tenderNumberInput").addEventListener("input", renderPrecedent);
+  document.querySelector('#addForm [name="bidder_name"]').addEventListener("input", renderPrecedent);
+
+  document.getElementById("addForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    const clauseRef = fd.get("clause_article_ref").trim();
+    const tenderNumber = fd.get("tender_number").trim();
+    const tenderMatch = TENDERS.find(t => t.tender_number === tenderNumber);
+    const isFastTrack = !!selectedPrecedentId;
+    const now = new Date();
+    const deadline = new Date(now);
+    deadline.setDate(deadline.getDate() + FAST_TRACK_WINDOW_DAYS);
+
+    const record = {
+      id: "EXC-" + Math.floor(500 + Math.random() * 500),
+      tender_number: tenderNumber,
+      tender_title: tenderMatch ? tenderMatch.tender_title : "",
+      tender_category: tenderMatch ? tenderMatch.category : "",
+      bidder_name: fd.get("bidder_name"),
+      tender_issuance_date: tenderMatch ? tenderMatch.issuance_date : "",
+      bid_closing_date: tenderMatch ? tenderMatch.bid_closing_date : "",
+      contract_document_ref: fd.get("contract_document_ref"),
+      clause_article_ref: clauseRef,
+      original_clause_wording: fd.get("original_clause_wording"),
+      initial_proposed_wording: fd.get("initial_proposed_wording"),
+      is_fast_track: isFastTrack,
+      referenced_precedent_id: isFastTrack ? selectedPrecedentId : null,
+      fast_track_legal_notified_at: isFastTrack ? now.toISOString().slice(0, 10) : "",
+      fast_track_auto_approve_deadline: isFastTrack ? deadline.toISOString().slice(0, 10) : "",
+      fast_track_legal_objected: false,
+      approval_status: "Pending",
+      approved_by: "",
+      approval_date: "",
+      // Fast-track adopts already-agreed wording, so there's no new
+      // negotiation to run; full review starts Open.
+      negotiation_status: isFastTrack ? "Closed" : "Open",
+      negotiation_rounds: [],
+      legal_consent_given: false,
+      legal_consent_date: "",
+      reuse_scope: null,
+      loggedBy: PGP.getRole()
+    };
+    ALL.push(record);
+    save();
+    renderTable(ALL);
+    PGP.closeModal("addModal");
+    ev.target.reset();
+  });
+}
+PGP.initAuth().then(() => {
+  PGP.renderChrome("exceptions.html");
+  init();
+});
+</script>
+</body>
+</html>
