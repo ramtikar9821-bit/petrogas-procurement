@@ -52,6 +52,14 @@ function newToken() {
   return toBase64(crypto.getRandomValues(new Uint8Array(32)));
 }
 
+// Human-typeable temp password: e.g. "K3F7-Q9M2". Admin shares it out-of-band;
+// there's no email delivery in this pass, so it must be readable on screen.
+function randomTempPassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const part = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return `${part()}-${part()}`;
+}
+
 function sessionCookie(token, maxAgeSeconds) {
   return `${SESSION_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`;
 }
@@ -117,6 +125,7 @@ export {
   hashPassword,
   verifyPassword,
   newId,
+  randomTempPassword,
   sessionCookie,
   clearSessionCookie,
   readCookie,
