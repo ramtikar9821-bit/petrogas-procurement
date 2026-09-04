@@ -1,13 +1,5 @@
-import { getSessionUser, requireAdmin, hashPassword, newId, json } from "../../_lib/auth.js";
+import { getSessionUser, requireAdmin, hashPassword, newId, randomTempPassword, json } from "../../_lib/auth.js";
 import { ASSIGNABLE_ROLES } from "../../_lib/roles.js";
-
-function randomTempPassword() {
-  // Human-typeable temp password: e.g. "K3F7-Q9M2". Admin shares it out-of-band;
-  // there's no email delivery in this pass, so it must be readable on screen.
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const part = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  return `${part()}-${part()}`;
-}
 
 export async function onRequestGet({ request, env }) {
   const user = await getSessionUser(request, env);
