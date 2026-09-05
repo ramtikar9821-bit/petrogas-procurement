@@ -134,6 +134,7 @@ function statusBadge(status) {
 
 function renderTenderList(items) {
   const el = document.getElementById("tenderCards");
+  const isAdmin = PGP.getRole() === "Admin";
   if (items.length === 0) {
     el.innerHTML = `<div class="card empty-state">No tenders match your search.</div>`;
     return;
@@ -153,7 +154,10 @@ function renderTenderList(items) {
         <div>Bidders: <strong style="color:var(--text);">${t.bidders.length}</strong></div>
         <div>Approval: <strong style="color:var(--text);">${PGP.escapeHtml(t.approvalStatus || "—")}</strong></div>
       </div>
-      <button class="secondary" onclick="openWorkspace('${t.tender_number}')">Open Evaluation Workspace</button>
+      <div style="display:flex;gap:8px;">
+        <button class="secondary" onclick="openWorkspace('${t.tender_number}')">Open Evaluation Workspace</button>
+        ${isAdmin ? `<button class="secondary" style="color:#b42318;" onclick="deleteTender('${t.tender_number}')">Delete</button>` : ""}
+      </div>
     </div>
   `).join("");
 }
@@ -165,6 +169,17 @@ function applySearch() {
     t.tender_number.toLowerCase().includes(q) ||
     (t.category || "").toLowerCase().includes(q)
   ));
+}
+
+// Admin-only: permanently removes a tender from this browser's record. Not an
+// API call — this module is still on the localStorage prototype path.
+function deleteTender(tenderNumber) {
+  const t = ALL.find(x => x.tender_number === tenderNumber);
+  if (!t) return;
+  if (!confirm(`Delete tender ${t.tender_number} (${t.tender_title})? This can't be undone.`)) return;
+  ALL = ALL.filter(x => x.tender_number !== tenderNumber);
+  save();
+  applySearch();
 }
 
 // ---------------- Workspace ----------------

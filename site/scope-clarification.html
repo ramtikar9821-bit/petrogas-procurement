@@ -167,6 +167,7 @@ function renderTable(items) {
   items.forEach(item => { if (checkEscalation(item)) anyEscalated = true; });
   if (anyEscalated) save();
 
+  const isAdmin = PGP.getRole() === "Admin";
   const tbody = document.querySelector("#clarTable tbody");
   if (items.length === 0) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No clarification requests match.</td></tr>`;
@@ -182,7 +183,10 @@ function renderTable(items) {
       <td>${assignedBadge(c)}</td>
       <td>${c.responseDueDate ? PGP.formatDate(c.responseDueDate) : "—"}</td>
       <td>${statusBadge(c)}</td>
-      <td><button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${c.id}')">View / Action</button></td>
+      <td>
+        <button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${c.id}')">View / Action</button>
+        ${isAdmin ? `<button class="secondary" style="padding:6px 10px;font-size:12px;color:#b42318;" onclick="deleteItem('${c.id}')">Delete</button>` : ""}
+      </td>
     </tr>
   `).join("");
 }
@@ -193,6 +197,17 @@ function save() {
 
 function findItem(id) {
   return ALL.find(c => c.id === id);
+}
+
+// Admin-only: permanently removes a clarification from this browser's record.
+// Not an API call — this module is still on the localStorage prototype path.
+function deleteItem(id) {
+  const item = findItem(id);
+  if (!item) return;
+  if (!confirm(`Delete clarification ${item.id} (${item.tenderRef})? This can't be undone.`)) return;
+  ALL = ALL.filter(c => c.id !== id);
+  save();
+  applySearch();
 }
 
 function openDetail(id) {

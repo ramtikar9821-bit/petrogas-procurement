@@ -152,6 +152,7 @@ function renderTable(items) {
   items.forEach(item => { if (checkFastTrackAutoApprove(item)) anyAutoApproved = true; });
   if (anyAutoApproved) save();
 
+  const isAdmin = PGP.getRole() === "Admin";
   const tbody = document.querySelector("#excTable tbody");
   if (items.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No exceptions match your search.</td></tr>`;
@@ -166,9 +167,23 @@ function renderTable(items) {
       <td>${pathBadge(e)}</td>
       <td>${approvalBadge(e.approval_status)}</td>
       <td>${negotiationBadge(e.negotiation_status)}</td>
-      <td><button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${e.id}')">View</button></td>
+      <td>
+        <button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${e.id}')">View</button>
+        ${isAdmin ? `<button class="secondary" style="padding:6px 10px;font-size:12px;color:#b42318;" onclick="deleteItem('${e.id}')">Delete</button>` : ""}
+      </td>
     </tr>
   `).join("");
+}
+
+// Admin-only: permanently removes an exception from this browser's record.
+// Not an API call — this module is still on the localStorage prototype path.
+function deleteItem(id) {
+  const item = findItem(id);
+  if (!item) return;
+  if (!confirm(`Delete exception ${item.id} (${item.clause_article_ref})? This can't be undone.`)) return;
+  ALL = ALL.filter(e => e.id !== id);
+  save();
+  applySearch();
 }
 
 function applySearch() {

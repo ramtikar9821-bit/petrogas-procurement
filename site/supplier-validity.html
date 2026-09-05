@@ -27,7 +27,7 @@
   <div class="card">
     <table id="registerTable">
       <thead>
-        <tr><th>Vendor</th><th>CR Number</th><th>Assessment</th><th>Source Tender</th><th>Finalized</th><th>Valid Until</th><th>Status</th></tr>
+        <tr><th>Vendor</th><th>CR Number</th><th>Assessment</th><th>Source Tender</th><th>Finalized</th><th>Valid Until</th><th>Status</th><th></th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -49,11 +49,12 @@ function statusBadge(entry) {
 
 function renderTable(items) {
   const tbody = document.querySelector("#registerTable tbody");
+  const isAdmin = PGP.getRole() === "Admin";
   if (items.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No finalized QHSE/Financial assessments yet — finalize one from a bidder's evaluation tab in Tender Evaluation.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No finalized QHSE/Financial assessments yet — finalize one from a bidder's evaluation tab in Tender Evaluation.</td></tr>`;
     return;
   }
-  tbody.innerHTML = items.map(e => `
+  tbody.innerHTML = items.map((e, i) => `
     <tr>
       <td>${PGP.escapeHtml(e.vendor_name)}</td>
       <td style="font-size:12px;color:var(--text-muted);">${PGP.escapeHtml(e.cr_number)}</td>
@@ -62,8 +63,33 @@ function renderTable(items) {
       <td>${PGP.formatDate(e.finalized_at)}</td>
       <td>${PGP.formatDate(e.validity_end_date)}</td>
       <td>${statusBadge(e)}</td>
+      <td>${isAdmin ? `<button class="secondary" style="padding:6px 10px;font-size:12px;color:#b42318;" onclick="deleteEntry(${i})">Delete</button>` : ""}</td>
     </tr>
   `).join("");
+}
+
+// Admin-only: clears the finalized QHSE/Financial assessment on the underlying
+// bidder record (there's no separate row to delete — this register is derived
+// from Tender Evaluation data), so the entry drops out of the register. Not an
+// API call — Tenders is still on the localStorage prototype path.
+function deleteEntry(index) {
+  const items = REGISTER.filter(e =>
+    e.vendor_name.toLowerCase().includes(document.getElementById("searchBox").value.toLowerCase()) ||
+    e.cr_number.toLowerCase().includes(document.getElementById("searchBox").value.toLowerCase())
+  );
+  const entry = items[index];
+  if (!entry) return;
+  if (!confirm(`Delete the finalized ${entry.assessment_type} assessment for ${entry.vendor_name}? This can't be undone.`)) return;
+
+  const type = entry.assessment_type === "QHSE" ? "qhse" : "financial";
+  const t = TENDERS.find(x => x.tender_number === entry.source_tender_number);
+  const b = t && (t.bidders || []).find(x => x.vendor_id === entry.vendor_id);
+  if (b && b[type]) {
+    b[type].finalized_at = null;
+    b[type].validity_end_date = null;
+  }
+  PGP.saveFullList("pgp_tenders_full", TENDERS);
+  refreshRegister();
 }
 
 function applySearch() {
