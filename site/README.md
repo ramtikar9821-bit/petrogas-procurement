@@ -3,12 +3,14 @@
 No-build HTML/CSS/JS front end covering the 5 modules from the URD: Tender Evaluation,
 Clarification, Exception & Clause Register, Contract Lifecycle, Standard Templates — backed
 by Cloudflare Pages Functions + a fully normalized D1 database (`migrations/0001_init.sql`,
-`0002_module_data.sql`). Login/user management, Vendors, Templates, Contracts, and
-Clarification are fully D1-backed — real, shared, multi-user data, not per-browser storage.
-**Tenders and Exceptions are still on the `localStorage` prototype path** (seeded from
-`data/*.json`, saved per-browser) — their D1 migration is the next piece of work; the schema
-for both already exists in `0002_module_data.sql`, only the API endpoints + frontend wiring
-are pending. Don't treat data in those two modules as durable/shared yet.
+`0002_module_data.sql`). Login/user management, Vendors, Templates, Contracts, Clarification,
+and Exceptions are fully D1-backed — real, shared, multi-user data, not per-browser storage.
+**Tenders (and the manually-added Supplier Validity entries, which piggyback on Tenders data)
+are still on the `localStorage` prototype path** (seeded from `data/tenders.json`, saved
+per-browser) — their D1 migration is the last piece of work; the schema already exists in
+`0002_module_data.sql` (criteria/bidders/QHSE ratings/financial statements/risk flags/ICV),
+only the API endpoints + frontend wiring are pending. Don't treat Tenders data as
+durable/shared yet.
 
 Built out per `petrogas_platform_buildspec.txt`:
 
@@ -33,10 +35,11 @@ Built out per `petrogas_platform_buildspec.txt`:
   original logger, or Admin can close it once answered. SLA-tracked (due date shown as
   Overdue once past-due, unanswered). A response is private to whoever asked — never
   broadcast or published to other bidders.
-- **Exception & Clause Register** — two paths: fast-track (cite a Legal-consented precedent in
-  scope — Any Bidder / Same Bidder Only / Same Tender Category — Legal gets a 2-day objection
-  window and it auto-approves if untouched) or full review (multi-round negotiation, Legal ⇄
-  Contract Engineer ⇄ bidder, every round logged). Independent `approval_status`
+- **Exception & Clause Register** (`functions/api/exceptions/`) — two paths: fast-track (cite a
+  Legal-consented precedent in scope — Any Bidder / Same Bidder Only / Same Tender Category —
+  Legal gets a 2-day objection window and it auto-approves if untouched, checked lazily on
+  every list load since there's no background job) or full review (multi-round negotiation,
+  Legal ⇄ Contract Engineer ⇄ bidder, every round logged). Independent `approval_status`
   (Accepted/Rejected/Countered/Pending) and `negotiation_status` (Open/Closed); precedent
   search distinguishes fast-track-eligible entries from historical-only ones.
 - **Contract Lifecycle** — renewal decisions (Renew/Extend/Do Not Renew) and a full
@@ -118,10 +121,12 @@ npx wrangler pages deploy site --project-name petrogas-procurement
 
 ## Next steps
 
-- Move Tenders and Exceptions off `localStorage` onto D1 — same pattern as
-  Vendors/Templates/Contracts/Clarification (`functions/api/<module>/`, `PGP.apiList`/
-  `apiCreate`/`apiUpdate`), schema already in `migrations/0002_module_data.sql`. Tenders is the
-  most involved (criteria/bidders/QHSE ratings/financial statements/risk flags/ICV all nested).
+- Move Tenders off `localStorage` onto D1 — same pattern as Vendors/Templates/Contracts/
+  Clarification/Exceptions (`functions/api/<module>/`, `PGP.apiList`/`apiCreate`/`apiUpdate`),
+  schema already in `migrations/0002_module_data.sql`. This is the most involved of the
+  migrations (criteria/bidders/QHSE ratings/financial statements/risk flags/ICV all nested).
+  The manually-added Supplier Validity entries (`supplier-validity.html`) also need a small new
+  standalone table, since they aren't tied to any tender/bidder.
 - Wire up the approval/notification workflows described in the URD (currently static labels only).
 - Email delivery for new-user temp passwords (currently shown on-screen only).
 - Audit log across all 5 modules (every edit/approval timestamped + attributable) — today

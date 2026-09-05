@@ -20,6 +20,8 @@ import { onRequestGet as contractsGet, onRequestPost as contractsPost } from "./
 import { onRequestPut as contractPut } from "./functions/api/contracts/[id].js";
 import { onRequestGet as clarificationsGet, onRequestPost as clarificationsPost } from "./functions/api/clarifications/index.js";
 import { onRequestPut as clarificationPut, onRequestDelete as clarificationDelete } from "./functions/api/clarifications/[id].js";
+import { onRequestGet as exceptionsGet, onRequestPost as exceptionsPost } from "./functions/api/exceptions/index.js";
+import { onRequestPut as exceptionPut, onRequestDelete as exceptionDelete } from "./functions/api/exceptions/[id].js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -51,6 +53,12 @@ export default {
       const clarificationMatch = pathname.match(/^\/api\/clarifications\/([^/]+)$/);
       if (clarificationMatch && method === "PUT") return clarificationPut({ ...base, params: { id: clarificationMatch[1] } });
       if (clarificationMatch && method === "DELETE") return clarificationDelete({ ...base, params: { id: clarificationMatch[1] } });
+
+      if (pathname === "/api/exceptions" && method === "GET") return exceptionsGet(base);
+      if (pathname === "/api/exceptions" && method === "POST") return exceptionsPost(base);
+      const exceptionMatch = pathname.match(/^\/api\/exceptions\/([^/]+)$/);
+      if (exceptionMatch && method === "PUT") return exceptionPut({ ...base, params: { id: exceptionMatch[1] } });
+      if (exceptionMatch && method === "DELETE") return exceptionDelete({ ...base, params: { id: exceptionMatch[1] } });
 
       if (pathname === "/api/templates" && method === "GET") return templatesGet(base);
       if (pathname === "/api/templates" && method === "POST") return templatesPost(base);

@@ -88,8 +88,7 @@
 
 <script src="assets/app.js"></script>
 <script>
-const STORAGE_KEY = "pgp_exceptions_full";
-const FAST_TRACK_WINDOW_DAYS = 2; // configurable — see buildspec Section 5
+const FAST_TRACK_WINDOW_DAYS = 2; // configurable — see buildspec Section 5, mirrored server-side in functions/api/exceptions/index.js
 
 // Legal is the only actor who can object to a fast-track, or act as the
 // "Legal" side of a full-review negotiation round.
@@ -118,7 +117,18 @@ function pathBadge(e) {
 }
 
 function findItem(id) { return ALL.find(e => e.id === id); }
-function save() { PGP.saveFullList(STORAGE_KEY, ALL); }
+
+async function applyUpdate(patch) {
+  let updated;
+  try {
+    updated = await PGP.apiUpdate("exceptions", currentId, patch);
+  } catch (err) {
+    alert(err.message);
+    return false;
+  }
+  Object.assign(findItem(currentId), updated);
+  return true;
+}
 
 // Precedent-matching rule (buildspec Section 5): a stored entry is a usable
 // fast-track precedent for a new request only if Legal has given consent,
@@ -132,26 +142,7 @@ function isEligiblePrecedent(precedent, newRequest) {
   return false;
 }
 
-// Auto-resolves a pending fast-track once its objection window has passed
-// with no Legal objection (buildspec: "if Legal takes no action within 2
-// days, system auto-sets approval_status=Accepted"). This prototype has no
-// background job, so it's applied whenever the list/detail renders.
-function checkFastTrackAutoApprove(item) {
-  if (!item.is_fast_track || item.fast_track_legal_objected) return false;
-  if (item.approval_status !== "Pending") return false;
-  if (!item.fast_track_auto_approve_deadline) return false;
-  if (PGP.daysUntil(item.fast_track_auto_approve_deadline) >= 0) return false;
-  item.approval_status = "Accepted";
-  item.approved_by = "System (auto-approved)";
-  item.approval_date = new Date().toISOString().slice(0, 10);
-  return true;
-}
-
 function renderTable(items) {
-  let anyAutoApproved = false;
-  items.forEach(item => { if (checkFastTrackAutoApprove(item)) anyAutoApproved = true; });
-  if (anyAutoApproved) save();
-
   const isAdmin = PGP.getRole() === "Admin";
   const tbody = document.querySelector("#excTable tbody");
   if (items.length === 0) {
@@ -175,14 +166,18 @@ function renderTable(items) {
   `).join("");
 }
 
-// Admin-only: permanently removes an exception from this browser's record.
-// Not an API call — this module is still on the localStorage prototype path.
-function deleteItem(id) {
+// Admin-only: permanently deletes an exception.
+async function deleteItem(id) {
   const item = findItem(id);
   if (!item) return;
   if (!confirm(`Delete exception ${item.id} (${item.clause_article_ref})? This can't be undone.`)) return;
+  try {
+    await PGP.apiDelete("exceptions", id);
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   ALL = ALL.filter(e => e.id !== id);
-  save();
   applySearch();
 }
 
@@ -338,70 +333,40 @@ function renderDetail() {
   document.getElementById("detailBody").innerHTML = html;
 }
 
-function updateApproval(value) {
-  const e = findItem(currentId);
-  e.approval_status = value;
-  if (value !== "Pending") {
-    e.approved_by = PGP.getRole();
-    e.approval_date = new Date().toISOString().slice(0, 10);
-  } else {
-    e.approved_by = "";
-    e.approval_date = "";
-  }
-  save();
+async function updateApproval(value) {
+  if (!(await applyUpdate({ approval_status: value }))) return;
   renderDetail();
   renderTable(ALL);
 }
 
-function updateNegotiation(value) {
-  findItem(currentId).negotiation_status = value;
-  save();
+async function updateNegotiation(value) {
+  if (!(await applyUpdate({ negotiation_status: value }))) return;
   renderDetail();
   renderTable(ALL);
 }
 
-function objectToFastTrack() {
-  const e = findItem(currentId);
-  e.fast_track_legal_objected = true;
-  e.is_fast_track = false;
-  e.negotiation_status = "Open";
-  save();
+async function objectToFastTrack() {
+  if (!(await applyUpdate({ action: "objectFastTrack" }))) return;
   renderDetail();
   renderTable(ALL);
 }
 
-function addNegotiationRound() {
-  const e = findItem(currentId);
+async function addNegotiationRound() {
   const proposedBy = document.getElementById("roundProposedBy").value;
   const wording = document.getElementById("roundWording").value.trim();
   if (!wording) { alert("Enter the wording for this round."); return; }
-  e.negotiation_rounds.push({
-    round_no: e.negotiation_rounds.length + 1,
-    proposed_by: proposedBy,
-    wording_text: wording,
-    date: new Date().toISOString().slice(0, 10),
-    communicated_by: PGP.getRole()
-  });
-  save();
+  if (!(await applyUpdate({ action: "addRound", proposed_by: proposedBy, wording_text: wording }))) return;
   renderDetail();
   renderTable(ALL);
 }
 
-function toggleLegalConsent(checked) {
-  const e = findItem(currentId);
-  e.legal_consent_given = checked;
-  e.legal_consent_date = checked ? new Date().toISOString().slice(0, 10) : "";
-  // Keep the stored value in sync with what the scope dropdown will visually
-  // default to, so an unset value never looks selected without actually being set.
-  e.reuse_scope = checked ? (e.reuse_scope || "Any Bidder") : null;
-  save();
+async function toggleLegalConsent(checked) {
+  if (!(await applyUpdate({ legal_consent_given: checked }))) return;
   renderDetail();
 }
 
-function setReuseScope(value) {
-  const e = findItem(currentId);
-  e.reuse_scope = value;
-  save();
+async function setReuseScope(value) {
+  if (!(await applyUpdate({ reuse_scope: value }))) return;
   renderDetail();
 }
 
@@ -476,7 +441,7 @@ async function init() {
   PGP.guardAddButton("exceptions", document.getElementById("addBtn"));
 
   const [exceptionsData, tendersData] = await Promise.all([
-    PGP.loadFullList("data/exceptions.json", STORAGE_KEY),
+    PGP.apiList("exceptions"),
     PGP.loadFullList("data/tenders.json", "pgp_tenders_full")
   ]);
   ALL = exceptionsData;
@@ -488,19 +453,14 @@ async function init() {
   document.getElementById("tenderNumberInput").addEventListener("input", renderPrecedent);
   document.querySelector('#addForm [name="bidder_name"]').addEventListener("input", renderPrecedent);
 
-  document.getElementById("addForm").addEventListener("submit", (ev) => {
+  document.getElementById("addForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const fd = new FormData(ev.target);
     const clauseRef = fd.get("clause_article_ref").trim();
     const tenderNumber = fd.get("tender_number").trim();
     const tenderMatch = TENDERS.find(t => t.tender_number === tenderNumber);
-    const isFastTrack = !!selectedPrecedentId;
-    const now = new Date();
-    const deadline = new Date(now);
-    deadline.setDate(deadline.getDate() + FAST_TRACK_WINDOW_DAYS);
 
     const record = {
-      id: "EXC-" + Math.floor(500 + Math.random() * 500),
       tender_number: tenderNumber,
       tender_title: tenderMatch ? tenderMatch.tender_title : "",
       tender_category: tenderMatch ? tenderMatch.category : "",
@@ -511,25 +471,16 @@ async function init() {
       clause_article_ref: clauseRef,
       original_clause_wording: fd.get("original_clause_wording"),
       initial_proposed_wording: fd.get("initial_proposed_wording"),
-      is_fast_track: isFastTrack,
-      referenced_precedent_id: isFastTrack ? selectedPrecedentId : null,
-      fast_track_legal_notified_at: isFastTrack ? now.toISOString().slice(0, 10) : "",
-      fast_track_auto_approve_deadline: isFastTrack ? deadline.toISOString().slice(0, 10) : "",
-      fast_track_legal_objected: false,
-      approval_status: "Pending",
-      approved_by: "",
-      approval_date: "",
-      // Fast-track adopts already-agreed wording, so there's no new
-      // negotiation to run; full review starts Open.
-      negotiation_status: isFastTrack ? "Closed" : "Open",
-      negotiation_rounds: [],
-      legal_consent_given: false,
-      legal_consent_date: "",
-      reuse_scope: null,
-      loggedBy: PGP.getRole()
+      referenced_precedent_id: selectedPrecedentId || null
     };
-    ALL.push(record);
-    save();
+    let created;
+    try {
+      created = await PGP.apiCreate("exceptions", record);
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    ALL.unshift(created);
     renderTable(ALL);
     PGP.closeModal("addModal");
     ev.target.reset();

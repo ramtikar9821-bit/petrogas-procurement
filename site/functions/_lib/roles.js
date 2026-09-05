@@ -30,5 +30,11 @@ export const ASSIGNABLE_ROLES = ROLES.filter(r => r !== "Vendor / Bidder");
 // Pages Function live here; keep in sync as more modules move to the API.
 export const PERMISSIONS = {
   tenders: ["Procurement Officer", "Contract Engineer"],
-  contracts: ["Procurement Officer", "Contract Owner"]
+  contracts: ["Procurement Officer", "Contract Owner"],
+  exceptions: ["Contract Engineer", "Procurement Officer", "Legal Team Member"],
+  exceptionsDecide: ["Legal Team Member", "HOD Legal", "Category Manager", "DOA Approver"]
 };
+
+// Legal is the only side that can object to a fast-track reuse, act as the
+// "Legal" side of a full-review round, or grant reuse-as-precedent consent.
+export const LEGAL_ROLES = ["Legal Team Member", "HOD Legal"];
