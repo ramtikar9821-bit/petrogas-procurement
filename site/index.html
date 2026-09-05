@@ -48,12 +48,12 @@ const MODULE_LABELS = {
 
 function renderRoleTable() {
   const current = PGP.getRole();
-  const rows = PGP.ROLES.map(role => {
+  const rows = PGP.getRoles().map(role => {
     const modules = Object.keys(MODULE_LABELS).filter(m => PGP.PERMISSIONS[m]?.includes(role));
     const modulesLabel = modules.length ? modules.map(m => MODULE_LABELS[m]).join(", ") : "—";
     return `<tr style="${role === current ? 'background:#e2f5f3;' : ''}">
       <td><strong>${PGP.escapeHtml(role)}</strong>${role === current ? ' <span class="badge teal">You</span>' : ''}</td>
-      <td>${PGP.escapeHtml(PGP.ROLE_INFO[role])}</td>
+      <td>${PGP.escapeHtml(PGP.ROLE_INFO[role] || "Custom role — added by an Admin.")}</td>
       <td>${PGP.escapeHtml(modulesLabel)}</td>
     </tr>`;
   }).join("");
@@ -61,6 +61,7 @@ function renderRoleTable() {
 }
 
 async function init() {
+  await PGP.initRoles();
   renderRoleTable();
   await PGP.initConfig();
   const [tenders, clarifications, exceptions, contracts, templates, vendors] = await Promise.all([

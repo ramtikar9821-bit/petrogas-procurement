@@ -17,7 +17,7 @@ const PGP = (() => {
   // for user creation/role assignment lives there). Admin manages accounts;
   // Vendor / Bidder is data, not an actor — it never logs in. Contract Engineer
   // (or Procurement Officer) always acts on a bidder's behalf, per the spec.
-  const ROLES = [
+  const DEFAULT_ROLES = [
     "Admin",
     "Procurement Officer",
     "Category Manager",
@@ -229,6 +229,48 @@ const PGP = (() => {
 
   function getValidityConfig() {
     return validityConfigCache || DEFAULT_VALIDITY_CONFIG;
+  }
+
+  // Admin-managed role list (functions/api/roles.js), same cache-once/read-sync
+  // pattern as validity config above. Falls back to DEFAULT_ROLES until
+  // initRoles() resolves, or if the fetch fails. Call PGP.initRoles() during a
+  // page's init(), alongside initAuth(), before any render that lists roles.
+  let rolesCache = null;
+
+  async function initRoles() {
+    const res = await fetch("/api/roles", { credentials: "same-origin" });
+    rolesCache = res.ok ? (await res.json()).roles : [...DEFAULT_ROLES];
+    return rolesCache;
+  }
+
+  function getRoles() {
+    return rolesCache || DEFAULT_ROLES;
+  }
+
+  async function addRole(role) {
+    const res = await fetch("/api/roles", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Couldn't add role.");
+    rolesCache = body.roles;
+    return rolesCache;
+  }
+
+  async function deleteRole(role) {
+    const res = await fetch("/api/roles", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, action: "delete" })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "Couldn't delete role.");
+    rolesCache = body.roles;
+    return rolesCache;
   }
 
   async function setValidityConfig(cfg) {
@@ -544,11 +586,12 @@ const PGP = (() => {
   })();
 
   return {
-    NAV_ITEMS, ROLES, ROLE_INFO, PERMISSIONS,
+    NAV_ITEMS, ROLES: DEFAULT_ROLES, ROLE_INFO, PERMISSIONS,
     getRole, getUser, initAuth, hasPermission, guardAddButton,
     renderChrome, escapeHtml, formatDate, daysUntil, contractStatus,
     loadData, saveExtra, loadFullList, saveFullList, openModal, closeModal, currency,
     initConfig, getValidityConfig, setValidityConfig, addMonths,
+    initRoles, getRoles, addRole, deleteRole,
     apiList, apiCreate, apiUpdate,
     loadVendors, findVendorByCr, upsertVendor, computeSupplierValidityRegister,
     TenderEval

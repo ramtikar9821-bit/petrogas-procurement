@@ -16,6 +16,16 @@
 
   <div id="deniedNote" class="note-banner" hidden>You're logged in as a non-Admin role, so this page is read-only for you — ask an Admin to make changes.</div>
 
+  <div class="card" id="rolesCard" hidden>
+    <h2 style="margin-top:0;font-size:15px;color:var(--navy);">Manage Roles</h2>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:-6px;">A role can't be deleted while any user still has it, and the Admin role itself can't be deleted.</p>
+    <div id="roleChips" style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;"></div>
+    <div class="add-row">
+      <div class="form-row"><label>New role name</label><input type="text" id="newRoleName" placeholder="e.g. Sustainability Lead"></div>
+      <button type="button" onclick="addRole()">Add Role</button>
+    </div>
+  </div>
+
   <div class="toolbar">
     <input type="text" id="searchBox" placeholder="Search name or email...">
     <button id="addBtn" onclick="PGP.openModal('addModal')">+ New User</button>
@@ -95,12 +105,51 @@ function statusBadge(s) {
 
 // Vendor / Bidder is external and has no login of its own (see the clarification
 // portal), so it's excluded from the roles an Admin can assign here.
-const ASSIGNABLE_ROLES = PGP.ROLES.filter(r => r !== "Vendor / Bidder");
+function assignableRoles() {
+  return PGP.getRoles().filter(r => r !== "Vendor / Bidder");
+}
 
 function renderRoleOptions(selectEl, selected) {
-  selectEl.innerHTML = ASSIGNABLE_ROLES
+  selectEl.innerHTML = assignableRoles()
     .map(r => `<option value="${r}" ${r === selected ? "selected" : ""}>${r}</option>`)
     .join("");
+}
+
+function renderRoleChips() {
+  const el = document.getElementById("roleChips");
+  el.innerHTML = PGP.getRoles().map(r => `
+    <span class="badge gray" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;">
+      ${PGP.escapeHtml(r)}
+      ${r === "Admin" ? "" : `<button type="button" title="Delete role" onclick="deleteRole('${r.replace(/'/g, "\\'")}')" style="border:none;background:none;color:#b42318;cursor:pointer;font-weight:700;padding:0;">×</button>`}
+    </span>
+  `).join("");
+}
+
+async function addRole() {
+  const input = document.getElementById("newRoleName");
+  const role = input.value.trim();
+  if (!role) return;
+  try {
+    await PGP.addRole(role);
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  input.value = "";
+  renderRoleChips();
+  renderRoleOptions(document.getElementById("roleSelect"), "SME");
+}
+
+async function deleteRole(role) {
+  if (!confirm(`Delete the "${role}" role? This can't be undone.`)) return;
+  try {
+    await PGP.deleteRole(role);
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  renderRoleChips();
+  renderRoleOptions(document.getElementById("roleSelect"), "SME");
 }
 
 function renderTable(items) {
@@ -195,11 +244,15 @@ async function loadUsers() {
 }
 
 async function init() {
+  await PGP.initRoles();
   const isAdmin = PGP.getRole() === "Admin";
   if (!isAdmin) {
     document.getElementById("deniedNote").hidden = false;
     document.getElementById("addBtn").disabled = true;
     document.getElementById("addBtn").title = "Admin access required.";
+  } else {
+    document.getElementById("rolesCard").hidden = false;
+    renderRoleChips();
   }
   renderRoleOptions(document.getElementById("roleSelect"), "SME");
   await loadUsers();

@@ -1,5 +1,5 @@
 import { getSessionUser, requireAdmin, hashPassword, randomTempPassword, json } from "../../_lib/auth.js";
-import { ASSIGNABLE_ROLES } from "../../_lib/roles.js";
+import { getRolesList } from "../../_lib/rolesStore.js";
 
 export async function onRequestPatch({ request, env, params }) {
   const admin = await getSessionUser(request, env);
@@ -22,8 +22,11 @@ export async function onRequestPatch({ request, env, params }) {
     return json({ id: target.id, name: target.name, email: target.email, tempPassword });
   }
 
-  if (role !== undefined && !ASSIGNABLE_ROLES.includes(role)) {
-    return json({ error: `Unknown role: ${role}` }, { status: 400 });
+  if (role !== undefined) {
+    const assignableRoles = (await getRolesList(env)).filter(r => r !== "Vendor / Bidder");
+    if (!assignableRoles.includes(role)) {
+      return json({ error: `Unknown role: ${role}` }, { status: 400 });
+    }
   }
   if (status !== undefined && status !== "active" && status !== "disabled") {
     return json({ error: "status must be 'active' or 'disabled'." }, { status: 400 });

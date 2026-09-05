@@ -9,6 +9,7 @@ import { onRequestPost as loginPost } from "./functions/api/login.js";
 import { onRequestPost as logoutPost } from "./functions/api/logout.js";
 import { onRequestGet as meGet } from "./functions/api/me.js";
 import { onRequestGet as configGet, onRequestPut as configPut } from "./functions/api/config.js";
+import { onRequestGet as rolesGet, onRequestPost as rolesPost } from "./functions/api/roles.js";
 import { onRequestGet as usersGet, onRequestPost as usersPost } from "./functions/api/users/index.js";
 import { onRequestPatch as userPatch } from "./functions/api/users/[id].js";
 import { onRequestGet as vendorsGet, onRequestPost as vendorsPost } from "./functions/api/vendors/index.js";
@@ -30,6 +31,8 @@ export default {
       if (pathname === "/api/me" && method === "GET") return meGet(base);
       if (pathname === "/api/config" && method === "GET") return configGet(base);
       if (pathname === "/api/config" && method === "PUT") return configPut(base);
+      if (pathname === "/api/roles" && method === "GET") return rolesGet(base);
+      if (pathname === "/api/roles" && method === "POST") return rolesPost(base);
 
       if (pathname === "/api/users" && method === "GET") return usersGet(base);
       if (pathname === "/api/users" && method === "POST") return usersPost(base);

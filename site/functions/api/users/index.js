@@ -1,5 +1,5 @@
 import { getSessionUser, requireAdmin, hashPassword, newId, randomTempPassword, json } from "../../_lib/auth.js";
-import { ASSIGNABLE_ROLES } from "../../_lib/roles.js";
+import { getRolesList } from "../../_lib/rolesStore.js";
 
 export async function onRequestGet({ request, env }) {
   const user = await getSessionUser(request, env);
@@ -20,7 +20,8 @@ export async function onRequestPost({ request, env }) {
   if (!name || !email || !role) {
     return json({ error: "name, email, and role are required." }, { status: 400 });
   }
-  if (!ASSIGNABLE_ROLES.includes(role)) {
+  const assignableRoles = (await getRolesList(env)).filter(r => r !== "Vendor / Bidder");
+  if (!assignableRoles.includes(role)) {
     return json({ error: `Unknown role: ${role}` }, { status: 400 });
   }
 
