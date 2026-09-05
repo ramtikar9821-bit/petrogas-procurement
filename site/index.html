@@ -27,6 +27,14 @@
     </table>
   </div>
 
+  <div class="card" id="myClarificationsCard" hidden>
+    <h2 style="margin-top:0;font-size:16px;color:var(--navy);">Clarifications Assigned to You</h2>
+    <table id="myClarificationsTable">
+      <thead><tr><th>ID</th><th>Tender Ref</th><th>Question</th><th>SLA Due</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <div class="card">
     <h2 style="margin-top:0;font-size:16px;color:var(--navy);">Contracts Expiring Soon (≤ 90 days)</h2>
     <table id="expiringTable">
@@ -38,9 +46,11 @@
 
 <script src="assets/app.js"></script>
 <script>
+// Clarification isn't listed here: logging/assigning one is open to any
+// authenticated user now (assignment goes straight to a real user account),
+// not gated by role like the other modules.
 const MODULE_LABELS = {
   tenders: "Tender Evaluation",
-  clarifications: "Clarification",
   exceptions: "Exception & Clause Register",
   contracts: "Contract Lifecycle",
   templates: "Templates"
@@ -66,7 +76,7 @@ async function init() {
   await PGP.initConfig();
   const [tenders, clarifications, exceptions, contracts, templates, vendors] = await Promise.all([
     PGP.loadFullList("data/tenders.json", "pgp_tenders_full"),
-    PGP.loadFullList("data/clarifications.json", "pgp_clarifications_full"),
+    PGP.apiList("clarifications"),
     PGP.loadFullList("data/exceptions.json", "pgp_exceptions_full"),
     PGP.apiList("contracts"),
     PGP.apiList("templates"),
@@ -77,6 +87,21 @@ async function init() {
   const overdueClarifications = clarifications.filter(c =>
     c.responseDueDate && c.status !== "Answered" && c.status !== "Closed" && PGP.daysUntil(c.responseDueDate) < 0
   ).length;
+
+  const me = PGP.getUser();
+  const myClarifications = clarifications.filter(c => c.assignedUserId === me?.id && c.status !== "Closed");
+  if (myClarifications.length > 0) {
+    document.getElementById("myClarificationsCard").hidden = false;
+    document.querySelector("#myClarificationsTable tbody").innerHTML = myClarifications.map(c => `
+      <tr>
+        <td><a href="scope-clarification.html">${PGP.escapeHtml(c.id)}</a></td>
+        <td>${PGP.escapeHtml(c.tenderRef)}</td>
+        <td style="max-width:280px;">${PGP.escapeHtml(c.question)}</td>
+        <td>${c.responseDueDate ? PGP.formatDate(c.responseDueDate) : "—"}</td>
+        <td><span class="badge ${PGP.daysUntil(c.responseDueDate) < 0 ? 'red' : 'teal'}">${c.status}</span></td>
+      </tr>
+    `).join("");
+  }
   const pendingExceptions = exceptions.filter(e => e.approval_status === "Pending").length;
   const expiringContracts = contracts.filter(c => PGP.contractStatus(c.endDate).label === "Expiring Soon").length;
   const expiredContracts = contracts.filter(c => PGP.contractStatus(c.endDate).label === "Expired").length;

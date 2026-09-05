@@ -3,12 +3,12 @@
 No-build HTML/CSS/JS front end covering the 5 modules from the URD: Tender Evaluation,
 Clarification, Exception & Clause Register, Contract Lifecycle, Standard Templates — backed
 by Cloudflare Pages Functions + a fully normalized D1 database (`migrations/0001_init.sql`,
-`0002_module_data.sql`). Login/user management, Vendors, Templates, and Contracts are fully
-D1-backed — real, shared, multi-user data, not per-browser storage. **Tenders,
-Clarifications, and Exceptions are still on the `localStorage` prototype path** (seeded from
+`0002_module_data.sql`). Login/user management, Vendors, Templates, Contracts, and
+Clarification are fully D1-backed — real, shared, multi-user data, not per-browser storage.
+**Tenders and Exceptions are still on the `localStorage` prototype path** (seeded from
 `data/*.json`, saved per-browser) — their D1 migration is the next piece of work; the schema
-for all three already exists in `0002_module_data.sql`, only the API endpoints + frontend
-wiring are pending. Don't treat data in those three modules as durable/shared yet.
+for both already exists in `0002_module_data.sql`, only the API endpoints + frontend wiring
+are pending. Don't treat data in those two modules as durable/shared yet.
 
 Built out per `petrogas_platform_buildspec.txt`:
 
@@ -25,11 +25,14 @@ Built out per `petrogas_platform_buildspec.txt`:
   already used on another tender offers to reuse its still-valid finalized QHSE/Financial
   assessment (always a confirm prompt, never silent), instead of re-entering it.
 - **Clarification** — queries from an Internal Stakeholder, a Bidder, or an External Authority
-  (OQ/PDO/PGEP/Other), always logged by an internal user (Contract Engineer/Procurement
-  Officer) since bidders have no system access. Assigned to a named person + department (with
-  a category-based department suggestion), SLA-tracked with automatic escalation past the due
-  date, and the Open → Routed → In Review → Answered → Closed lifecycle. A response is private
-  to whoever asked — never broadcast or published to other bidders.
+  (OQ/PDO/PGEP/Other), logged by any authenticated internal user (bidders have no system
+  access) and assigned directly to a real user account at creation time (`functions/api/
+  clarifications/`) — no role-based routing gate, since roles are Admin-configurable now. The
+  assignee gets a notification on their dashboard (`index.html` → "Clarifications Assigned to
+  You") and is the only one (besides Admin) who can submit the response; the assignee, the
+  original logger, or Admin can close it once answered. SLA-tracked (due date shown as
+  Overdue once past-due, unanswered). A response is private to whoever asked — never
+  broadcast or published to other bidders.
 - **Exception & Clause Register** — two paths: fast-track (cite a Legal-consented precedent in
   scope — Any Bidder / Same Bidder Only / Same Tender Category — Legal gets a 2-day objection
   window and it auto-approves if untouched) or full review (multi-round negotiation, Legal ⇄
@@ -115,15 +118,12 @@ npx wrangler pages deploy site --project-name petrogas-procurement
 
 ## Next steps
 
-- Move Tenders, Clarifications, and Exceptions off `localStorage` onto D1 — same pattern as
-  Vendors/Templates/Contracts (`functions/api/<module>/`, `PGP.apiList`/`apiCreate`/
-  `apiUpdate`), schema already in `migrations/0002_module_data.sql`. Tenders is the most
-  involved (criteria/bidders/QHSE ratings/financial statements/risk flags/ICV all nested).
+- Move Tenders and Exceptions off `localStorage` onto D1 — same pattern as
+  Vendors/Templates/Contracts/Clarification (`functions/api/<module>/`, `PGP.apiList`/
+  `apiCreate`/`apiUpdate`), schema already in `migrations/0002_module_data.sql`. Tenders is the
+  most involved (criteria/bidders/QHSE ratings/financial statements/risk flags/ICV all nested).
 - Wire up the approval/notification workflows described in the URD (currently static labels only).
 - Email delivery for new-user temp passwords (currently shown on-screen only).
 - Audit log across all 5 modules (every edit/approval timestamped + attributable) — today
   each table only tracks what's directly relevant to its own workflow (e.g. `changed_by`/
   `changed_at` on amendments), not a unified cross-module log.
-
-
-  

@@ -12,11 +12,14 @@ import { onRequestGet as configGet, onRequestPut as configPut } from "./function
 import { onRequestGet as rolesGet, onRequestPost as rolesPost } from "./functions/api/roles.js";
 import { onRequestGet as usersGet, onRequestPost as usersPost } from "./functions/api/users/index.js";
 import { onRequestPatch as userPatch } from "./functions/api/users/[id].js";
+import { onRequestGet as assignableUsersGet } from "./functions/api/users/assignable.js";
 import { onRequestGet as vendorsGet, onRequestPost as vendorsPost } from "./functions/api/vendors/index.js";
 import { onRequestGet as templatesGet, onRequestPost as templatesPost } from "./functions/api/templates/index.js";
 import { onRequestPut as templatePut } from "./functions/api/templates/[id].js";
 import { onRequestGet as contractsGet, onRequestPost as contractsPost } from "./functions/api/contracts/index.js";
 import { onRequestPut as contractPut } from "./functions/api/contracts/[id].js";
+import { onRequestGet as clarificationsGet, onRequestPost as clarificationsPost } from "./functions/api/clarifications/index.js";
+import { onRequestPut as clarificationPut, onRequestDelete as clarificationDelete } from "./functions/api/clarifications/[id].js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -36,11 +39,18 @@ export default {
 
       if (pathname === "/api/users" && method === "GET") return usersGet(base);
       if (pathname === "/api/users" && method === "POST") return usersPost(base);
+      if (pathname === "/api/users/assignable" && method === "GET") return assignableUsersGet(base);
       const userMatch = pathname.match(/^\/api\/users\/([^/]+)$/);
       if (userMatch && method === "PATCH") return userPatch({ ...base, params: { id: userMatch[1] } });
 
       if (pathname === "/api/vendors" && method === "GET") return vendorsGet(base);
       if (pathname === "/api/vendors" && method === "POST") return vendorsPost(base);
+
+      if (pathname === "/api/clarifications" && method === "GET") return clarificationsGet(base);
+      if (pathname === "/api/clarifications" && method === "POST") return clarificationsPost(base);
+      const clarificationMatch = pathname.match(/^\/api\/clarifications\/([^/]+)$/);
+      if (clarificationMatch && method === "PUT") return clarificationPut({ ...base, params: { id: clarificationMatch[1] } });
+      if (clarificationMatch && method === "DELETE") return clarificationDelete({ ...base, params: { id: clarificationMatch[1] } });
 
       if (pathname === "/api/templates" && method === "GET") return templatesGet(base);
       if (pathname === "/api/templates" && method === "POST") return templatesPost(base);

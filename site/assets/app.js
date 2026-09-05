@@ -46,13 +46,10 @@ const PGP = (() => {
   // as the QHSE/financial logic below).
   const PERMISSIONS = {
     tenders: ["Procurement Officer", "Contract Engineer"],
-    // Vendor/Bidder has no system access (per spec: bidders never log in) — a
-    // clarification or exception is always logged by an internal user on the
-    // bidder's behalf, normally Contract Engineer as the intake point.
-    clarifications: ["Contract Engineer", "Procurement Officer"],
-    // Routing/closing a clarification is an internal admin action, distinct
-    // from who's allowed to log the original request.
-    clarificationsRoute: ["Procurement Officer"],
+    // Clarification isn't listed here: logging and assigning one (directly to
+    // a real user account) is open to any authenticated user — see
+    // functions/api/clarifications/. Answering/closing is gated on being the
+    // assignee/creator/Admin, checked server-side per record, not by role.
     exceptions: ["Contract Engineer", "Procurement Officer", "Legal Team Member"],
     // Approval chain per the spec (Legal -> Category Manager -> DOA Approver);
     // any of these can record a decision in this prototype rather than
@@ -335,6 +332,15 @@ const PGP = (() => {
     return res.json();
   }
 
+  async function apiDelete(module, id) {
+    const res = await fetch(`/api/${module}/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "same-origin"
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Couldn't delete ${module} record.`);
+    return res.json();
+  }
+
   // --- Vendor master (buildspec Section 3.0) — D1-backed ---
 
   async function loadVendors() {
@@ -592,7 +598,7 @@ const PGP = (() => {
     loadData, saveExtra, loadFullList, saveFullList, openModal, closeModal, currency,
     initConfig, getValidityConfig, setValidityConfig, addMonths,
     initRoles, getRoles, addRole, deleteRole,
-    apiList, apiCreate, apiUpdate,
+    apiList, apiCreate, apiUpdate, apiDelete,
     loadVendors, findVendorByCr, upsertVendor, computeSupplierValidityRegister,
     TenderEval
   };
