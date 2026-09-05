@@ -16,9 +16,12 @@
   .section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.3px; }
   .round-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; background: #fafbfd; }
   .round-item .meta { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
-  .path-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-  .path-badge.fast { background: #fdf3dc; color: var(--amber); }
-  .path-badge.full { background: #eef4fb; color: var(--navy-light); }
+  .id-cell {
+    display: inline-block; max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; vertical-align: bottom; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; color: var(--text-muted);
+  }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -112,8 +115,8 @@ function negotiationBadge(status) {
 
 function pathBadge(e) {
   return e.is_fast_track
-    ? `<span class="path-badge fast">Fast-track</span>`
-    : `<span class="path-badge full">Full review</span>`;
+    ? `<span class="badge amber">Fast-track</span>`
+    : `<span class="badge gray">Full review</span>`;
 }
 
 function findItem(id) { return ALL.find(e => e.id === id); }
@@ -151,7 +154,7 @@ function renderTable(items) {
   }
   tbody.innerHTML = items.map(e => `
     <tr>
-      <td>${PGP.escapeHtml(e.id)}</td>
+      <td><span class="id-cell" title="${PGP.escapeHtml(e.id)}">${PGP.escapeHtml(e.id)}</span></td>
       <td>${PGP.escapeHtml(e.tender_number)}</td>
       <td>${PGP.escapeHtml(e.bidder_name)}</td>
       <td>${PGP.escapeHtml(e.clause_article_ref)}</td>
@@ -159,8 +162,10 @@ function renderTable(items) {
       <td>${approvalBadge(e.approval_status)}</td>
       <td>${negotiationBadge(e.negotiation_status)}</td>
       <td>
-        <button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${e.id}')">View</button>
-        ${isAdmin ? `<button class="secondary" style="padding:6px 10px;font-size:12px;color:#b42318;" onclick="deleteItem('${e.id}')">Delete</button>` : ""}
+        <div class="row-actions">
+          <button class="secondary" style="padding:6px 10px;font-size:12px;" onclick="openDetail('${e.id}')">View</button>
+          ${isAdmin ? `<button class="secondary" style="padding:6px 10px;font-size:12px;color:#b42318;" onclick="deleteItem('${e.id}')">Delete</button>` : ""}
+        </div>
       </td>
     </tr>
   `).join("");
