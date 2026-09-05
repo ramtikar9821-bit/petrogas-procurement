@@ -1,18 +1,12 @@
 import { getSessionUser, json } from "../_lib/auth.js";
 import { requireRole } from "../_lib/db.js";
 import { PERMISSIONS } from "../_lib/roles.js";
-
-const DEFAULT_VALIDITY_CONFIG = {
-  qhse_validity_months: 12,
-  financial_validity_months: 12,
-  reminder_days_before: [90, 60, 30]
-};
+import { DEFAULT_VALIDITY_CONFIG, getValidityConfig } from "../_lib/validityStore.js";
 
 export async function onRequestGet({ request, env }) {
   const user = await getSessionUser(request, env);
   if (!user) return json({ error: "Not authenticated." }, { status: 401 });
-  const row = await env.DB.prepare("SELECT value FROM app_config WHERE key = 'validity'").first();
-  return json(row ? JSON.parse(row.value) : DEFAULT_VALIDITY_CONFIG);
+  return json(await getValidityConfig(env));
 }
 
 // Shared validity/reminder config (buildspec Section 6.2) — same authority

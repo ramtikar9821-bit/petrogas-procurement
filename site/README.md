@@ -3,14 +3,10 @@
 No-build HTML/CSS/JS front end covering the 5 modules from the URD: Tender Evaluation,
 Clarification, Exception & Clause Register, Contract Lifecycle, Standard Templates — backed
 by Cloudflare Pages Functions + a fully normalized D1 database (`migrations/0001_init.sql`,
-`0002_module_data.sql`). Login/user management, Vendors, Templates, Contracts, Clarification,
-and Exceptions are fully D1-backed — real, shared, multi-user data, not per-browser storage.
-**Tenders (and the manually-added Supplier Validity entries, which piggyback on Tenders data)
-are still on the `localStorage` prototype path** (seeded from `data/tenders.json`, saved
-per-browser) — their D1 migration is the last piece of work; the schema already exists in
-`0002_module_data.sql` (criteria/bidders/QHSE ratings/financial statements/risk flags/ICV),
-only the API endpoints + frontend wiring are pending. Don't treat Tenders data as
-durable/shared yet.
+`0002_module_data.sql`, `0003_vendor_validity_entries.sql`). **Every module is now fully
+D1-backed** — real, shared, multi-user data, not per-browser storage. `data/*.json` files are
+kept only as historical reference for the original prototype seed shape; nothing reads them
+anymore.
 
 Built out per `petrogas_platform_buildspec.txt`:
 
@@ -20,12 +16,15 @@ Built out per `petrogas_platform_buildspec.txt`:
   and sub-module-level permissions (`assets/app.js` → `PERMISSIONS`, mirrored server-side in
   `functions/_lib/roles.js`). An Admin creates accounts and assigns roles from
   `admin-users.html`; everyone else logs in at `login.html`.
-- **Tender Evaluation** — each bidder rolls up Compliance, QHSE (10-element questionnaire,
-  live-scored), Financial (ratios computed from entered statement line items), and ICV into
-  a Master Evaluation View (`assets/app.js` → `TenderEval`). Bidders are linked to a
-  persistent Vendor master (`data/vendors.json`, keyed by CR number) — adding a vendor
-  already used on another tender offers to reuse its still-valid finalized QHSE/Financial
-  assessment (always a confirm prompt, never silent), instead of re-entering it.
+- **Tender Evaluation** (`functions/api/tenders/`) — each bidder rolls up Compliance, QHSE
+  (10-element questionnaire, live-scored), Financial (ratios computed from entered statement
+  line items), and ICV into a Master Evaluation View (`assets/app.js` → `TenderEval`), all
+  D1-backed (criteria/tender_bidders/compliance_responses/qhse_assessments+ratings/
+  financial_assessments+statements+risk_flags/icv_submissions). Bidders are linked to the
+  persistent Vendor master (keyed by CR number) — adding a vendor already used on another
+  tender offers to reuse its still-valid finalized QHSE/Financial assessment (always a confirm
+  prompt, never silent, computed client-side; only the resulting copy is persisted server-side),
+  instead of re-entering it.
 - **Clarification** — queries from an Internal Stakeholder, a Bidder, or an External Authority
   (OQ/PDO/PGEP/Other), logged by any authenticated internal user (bidders have no system
   access) and assigned directly to a real user account at creation time (`functions/api/
@@ -47,7 +46,9 @@ Built out per `petrogas_platform_buildspec.txt`:
   cadence as Supplier Validity below (`PGP.getValidityConfig().reminder_days_before`).
 - **Supplier Validity** (`supplier-validity.html`) — the register of every vendor's finalized
   QHSE/Financial assessments and their validity window (Valid/Expired), derived from whatever
-  bidder records have been "Finalized" in Tender Evaluation. Validity durations and the
+  bidder records have been "Finalized" in Tender Evaluation, plus standalone entries added
+  directly (e.g. a certification held outside any tender — `functions/api/validityEntries/`,
+  its own D1 table since it isn't tied to a tender/bidder). Validity durations and the
   reminder cadence are admin-editable on the page itself (12-month default — a placeholder
   per the spec's own open item, not a confirmed figure).
 - **Templates** — document number + revision (not a bare version string), with a per-template
@@ -69,9 +70,8 @@ npx wrangler d1 create petrogas-procurement-db
 ```
 
 Copy the `database_id` it prints into `wrangler.toml` (`REPLACE_WITH_D1_DATABASE_ID`), then
-apply both migrations (0001 = users/sessions, 0002 = vendors/tenders/clarifications/
-exceptions/contracts/templates/config — see the module-status note above for which of these
-tables already have live API endpoints):
+apply all three migrations (0001 = users/sessions, 0002 = vendors/tenders/clarifications/
+exceptions/contracts/templates/config, 0003 = standalone Supplier Validity entries):
 
 ```
 npx wrangler d1 migrations apply DB --local     # for local dev
@@ -121,12 +121,6 @@ npx wrangler pages deploy site --project-name petrogas-procurement
 
 ## Next steps
 
-- Move Tenders off `localStorage` onto D1 — same pattern as Vendors/Templates/Contracts/
-  Clarification/Exceptions (`functions/api/<module>/`, `PGP.apiList`/`apiCreate`/`apiUpdate`),
-  schema already in `migrations/0002_module_data.sql`. This is the most involved of the
-  migrations (criteria/bidders/QHSE ratings/financial statements/risk flags/ICV all nested).
-  The manually-added Supplier Validity entries (`supplier-validity.html`) also need a small new
-  standalone table, since they aren't tied to any tender/bidder.
 - Wire up the approval/notification workflows described in the URD (currently static labels only).
 - Email delivery for new-user temp passwords (currently shown on-screen only).
 - Audit log across all 5 modules (every edit/approval timestamped + attributable) — today

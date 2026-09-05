@@ -442,7 +442,7 @@ async function init() {
 
   const [exceptionsData, tendersData] = await Promise.all([
     PGP.apiList("exceptions"),
-    PGP.loadFullList("data/tenders.json", "pgp_tenders_full")
+    PGP.apiList("tenders")
   ]);
   ALL = exceptionsData;
   TENDERS = tendersData;

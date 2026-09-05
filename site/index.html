@@ -40,7 +40,7 @@
 async function init() {
   await PGP.initConfig();
   const [tenders, clarifications, exceptions, contracts, templates, vendors] = await Promise.all([
-    PGP.loadFullList("data/tenders.json", "pgp_tenders_full"),
+    PGP.apiList("tenders"),
     PGP.apiList("clarifications"),
     PGP.loadFullList("data/exceptions.json", "pgp_exceptions_full"),
     PGP.apiList("contracts"),

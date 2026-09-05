@@ -113,7 +113,6 @@
 
 <script src="assets/app.js"></script>
 <script>
-const STORAGE_KEY = "pgp_tenders_full";
 let ALL = [];
 let QHSE_QUESTIONS = [];
 let VENDORS = [];
@@ -123,7 +122,13 @@ let currentTab = "compliance";
 
 function tender() { return ALL.find(t => t.tender_number === currentTenderNumber); }
 function bidder() { return tender()?.bidders.find(b => b.bidder_id === currentBidderId); }
-function save() { PGP.saveFullList(STORAGE_KEY, ALL); }
+
+// Every PUT below targets tenders/<tn>/bidders/<id>/<sub-resource> via the
+// generic PGP.apiUpdate(module, id, patch) helper — module carries the path
+// up to the sub-resource, id is the sub-resource name itself.
+function bidderApiUpdate(subResource, patch) {
+  return PGP.apiUpdate(`tenders/${tender().tender_number}/bidders/${bidder().bidder_id}`, subResource, patch);
+}
 
 function statusBadge(status) {
   const map = { "Draft Criteria": "gray", "Evaluation In Progress": "amber", "Pending DOA Approval": "teal", "Awarded": "green" };
@@ -171,14 +176,19 @@ function applySearch() {
   ));
 }
 
-// Admin-only: permanently removes a tender from this browser's record. Not an
-// API call — this module is still on the localStorage prototype path.
-function deleteTender(tenderNumber) {
+// Admin-only: permanently deletes a tender (cascades to all its bidders/
+// evaluations server-side).
+async function deleteTender(tenderNumber) {
   const t = ALL.find(x => x.tender_number === tenderNumber);
   if (!t) return;
   if (!confirm(`Delete tender ${t.tender_number} (${t.tender_title})? This can't be undone.`)) return;
+  try {
+    await PGP.apiDelete("tenders", tenderNumber);
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
   ALL = ALL.filter(x => x.tender_number !== tenderNumber);
-  save();
   applySearch();
 }
 
@@ -280,20 +290,19 @@ function renderWorkspace() {
 
 function statusBadgeText(status) { return status; }
 
-function addCriterion() {
+async function addCriterion() {
   const t = tender();
   const type = document.getElementById("newCritType").value;
   const text = document.getElementById("newCritText").value.trim();
   if (!text) { alert("Enter a requirement description."); return; }
-  const seq = t.criteria.length + 1;
-  t.criteria.push({
-    criterion_id: `${t.tender_number}-C${seq}-${Date.now().toString(36)}`,
-    criteria_type: type,
-    sequence_no: String(seq),
-    requirement_description: text,
-    end_user_notes: ""
-  });
-  save();
+  let criterion;
+  try {
+    criterion = await PGP.apiCreate(`tenders/${t.tender_number}/criteria`, { criteria_type: type, requirement_description: text });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  t.criteria.push(criterion);
   renderWorkspace();
 }
 
@@ -370,17 +379,16 @@ async function addBidder() {
     if (reusedFinancial) financial = reusedFinancial;
   }
 
-  t.bidders.push({
-    bidder_id: `${t.tender_number}-B${t.bidders.length + 1}-${Date.now().toString(36)}`,
-    name,
-    vendor_id: vendor ? vendor.vendor_id : null,
-    complianceResponses: {},
-    qhse,
-    financial,
-    icv: { icv_certificate_ref: "", icv_score_pct: null, omanised_roles_confirmed: false, min_icv_threshold: 60 },
-    finalRecommendation: ""
-  });
-  save();
+  let created;
+  try {
+    created = await PGP.apiCreate(`tenders/${t.tender_number}/bidders`, {
+      name, vendor_id: vendor ? vendor.vendor_id : null, qhse, financial
+    });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  t.bidders.push(created);
   renderWorkspace();
 }
 
@@ -409,7 +417,6 @@ function renderEvalTab() {
 }
 
 function persistAndRefresh() {
-  save();
   renderWorkspace();
   renderEvalTab();
 }
@@ -450,11 +457,18 @@ function renderComplianceTab() {
   return html;
 }
 
-function updateCompliance(criterionId, value) {
+async function updateCompliance(criterionId, value) {
   const b = bidder();
-  if (value) b.complianceResponses[criterionId] = value;
-  else delete b.complianceResponses[criterionId];
-  persistAndRefresh();
+  let result;
+  try {
+    result = await bidderApiUpdate("compliance", { criterion_id: criterionId, response: value });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  b.complianceResponses = result.complianceResponses;
+  renderWorkspace();
+  renderEvalTab();
 }
 
 // --- QHSE tab ---
@@ -505,10 +519,19 @@ function renderQhseTab() {
   return html;
 }
 
-function updateQhseRating(qNo, value) {
+async function updateQhseRating(qNo, value) {
   const b = bidder();
-  if (value) b.qhse.ratings[qNo] = Number(value);
-  else delete b.qhse.ratings[qNo];
+  const ratings = { ...b.qhse.ratings };
+  if (value) ratings[qNo] = Number(value);
+  else delete ratings[qNo];
+  let result;
+  try {
+    result = await bidderApiUpdate("qhse", { ratings });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  b.qhse = result;
   persistAndRefresh();
 }
 
@@ -531,25 +554,31 @@ function renderValidityStrip(block, label, canEdit, finalizeCall) {
   return html;
 }
 
-function finalizeQhse() {
-  const t = tender(), b = bidder();
+async function finalizeQhse() {
+  const b = bidder();
   if (!b.vendor_id) { alert("This bidder wasn't linked to a vendor (no CR number was entered when it was added) — validity tracking needs a vendor link, so it can't be finalized."); return; }
-  const cfg = PGP.getValidityConfig();
-  b.qhse.finalized_at = new Date().toISOString().slice(0, 10);
-  b.qhse.validity_end_date = PGP.addMonths(b.qhse.finalized_at, cfg.qhse_validity_months);
-  b.qhse.vendor_id = b.vendor_id;
-  b.qhse.source_tender_number = t.tender_number;
+  let result;
+  try {
+    result = await bidderApiUpdate("qhse", { finalize: true });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  b.qhse = result;
   persistAndRefresh();
 }
 
-function finalizeFinancial() {
-  const t = tender(), b = bidder();
+async function finalizeFinancial() {
+  const b = bidder();
   if (!b.vendor_id) { alert("This bidder wasn't linked to a vendor (no CR number was entered when it was added) — validity tracking needs a vendor link, so it can't be finalized."); return; }
-  const cfg = PGP.getValidityConfig();
-  b.financial.finalized_at = new Date().toISOString().slice(0, 10);
-  b.financial.validity_end_date = PGP.addMonths(b.financial.finalized_at, cfg.financial_validity_months);
-  b.financial.vendor_id = b.vendor_id;
-  b.financial.source_tender_number = t.tender_number;
+  let result;
+  try {
+    result = await bidderApiUpdate("financial", { finalize: true });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  b.financial = result;
   persistAndRefresh();
 }
 
@@ -640,41 +669,86 @@ function renderFinancialTab() {
   return html;
 }
 
-function updateFinancialField(idx, field, value) {
+async function saveStatements(b, statements) {
+  let result;
+  try {
+    result = await bidderApiUpdate("financial", { statements });
+  } catch (err) {
+    alert(err.message);
+    return false;
+  }
+  b.financial = result;
+  return true;
+}
+
+async function saveRiskFlags(b, riskFlags) {
+  let result;
+  try {
+    result = await bidderApiUpdate("financial", { riskFlags });
+  } catch (err) {
+    alert(err.message);
+    return false;
+  }
+  b.financial = result;
+  return true;
+}
+
+async function updateFinancialField(idx, field, value) {
   const b = bidder();
-  b.financial.statements[idx][field] = value === "" ? null : Number(value);
+  const statements = b.financial.statements.map((s, i) => i === idx ? { ...s, [field]: value === "" ? null : Number(value) } : s);
+  if (!(await saveStatements(b, statements))) return;
   persistAndRefresh();
 }
 
-function addStatementYear() {
+async function addStatementYear() {
   const b = bidder();
   const year = Number(document.getElementById("newStatementYear").value);
   if (!year) { alert("Enter a year."); return; }
-  b.financial.statements.push({ year, revenue: 0, gross_profit: 0, net_profit_loss: 0, total_assets: 0, total_liabilities: 0, total_equity: 0, current_assets: 0, current_liabilities: 0 });
+  const statements = [...b.financial.statements, { year, revenue: 0, gross_profit: 0, net_profit_loss: 0, total_assets: 0, total_liabilities: 0, total_equity: 0, current_assets: 0, current_liabilities: 0 }];
+  if (!(await saveStatements(b, statements))) return;
   persistAndRefresh();
 }
 
-function addRiskFlag() {
+async function addRiskFlag() {
   const b = bidder();
   const type = document.getElementById("newFlagType").value;
   const desc = document.getElementById("newFlagDesc").value.trim();
   if (!desc) { alert("Enter a description for the flag."); return; }
-  b.financial.riskFlags.push({ flag_type: type, description: desc });
+  const riskFlags = [...b.financial.riskFlags, { flag_type: type, description: desc }];
+  if (!(await saveRiskFlags(b, riskFlags))) return;
   persistAndRefresh();
 }
 
-function removeRiskFlag(idx) {
-  bidder().financial.riskFlags.splice(idx, 1);
+async function removeRiskFlag(idx) {
+  const b = bidder();
+  const riskFlags = b.financial.riskFlags.filter((_, i) => i !== idx);
+  if (!(await saveRiskFlags(b, riskFlags))) return;
   persistAndRefresh();
 }
 
-function updateFinancialOutcome(value) {
-  bidder().financial.outcome = value;
+async function updateFinancialOutcome(value) {
+  const b = bidder();
+  let result;
+  try {
+    result = await bidderApiUpdate("financial", { outcome: value });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  b.financial = result;
   persistAndRefresh();
 }
 
-function updateFinancialComments(value) {
-  bidder().financial.evaluatorComments = value;
+async function updateFinancialComments(value) {
+  const b = bidder();
+  let result;
+  try {
+    result = await bidderApiUpdate("financial", { evaluatorComments: value });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  b.financial = result;
   persistAndRefresh();
 }
 
@@ -707,10 +781,17 @@ function renderIcvTab() {
   return html;
 }
 
-function updateIcvField(field, value) {
+async function updateIcvField(field, value) {
   const b = bidder();
-  if (field === "icv_score_pct" || field === "min_icv_threshold") b.icv[field] = value === "" ? null : Number(value);
-  else b.icv[field] = value;
+  const patchValue = (field === "icv_score_pct" || field === "min_icv_threshold") ? (value === "" ? null : Number(value)) : value;
+  let result;
+  try {
+    result = await bidderApiUpdate("icv", { [field]: patchValue });
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  b.icv = result;
   persistAndRefresh();
 }
 
@@ -720,7 +801,7 @@ async function init() {
   PGP.guardAddButton("tenders", document.getElementById("addBtn"));
   await PGP.initConfig();
   const [tendersData, qhseData, vendorsData] = await Promise.all([
-    PGP.loadFullList("data/tenders.json", STORAGE_KEY),
+    PGP.apiList("tenders"),
     fetch("data/qhse-questions.json").then(r => r.json()),
     PGP.loadVendors()
   ]);
@@ -731,24 +812,23 @@ async function init() {
 
   document.getElementById("searchBox").addEventListener("input", applySearch);
 
-  document.getElementById("addForm").addEventListener("submit", (e) => {
+  document.getElementById("addForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const record = {
-      tender_number: fd.get("tender_number"),
-      tender_title: fd.get("tender_title"),
-      issuance_date: fd.get("issuance_date"),
-      bid_closing_date: fd.get("bid_closing_date"),
-      category: fd.get("category"),
-      status: "Draft Criteria",
-      approvalStatus: "Not Started",
-      financialThreshold: { min_current_ratio: 1.0, max_debt_to_equity: 2.0, min_net_profit_margin_pct: 0 },
-      criteria: [],
-      bidders: [],
-      evaluators: []
-    };
-    ALL.push(record);
-    save();
+    let created;
+    try {
+      created = await PGP.apiCreate("tenders", {
+        tender_number: fd.get("tender_number"),
+        tender_title: fd.get("tender_title"),
+        issuance_date: fd.get("issuance_date"),
+        bid_closing_date: fd.get("bid_closing_date"),
+        category: fd.get("category")
+      });
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    ALL.push(created);
     renderTenderList(ALL);
     PGP.closeModal("addModal");
     e.target.reset();

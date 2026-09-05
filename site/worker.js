@@ -22,6 +22,16 @@ import { onRequestGet as clarificationsGet, onRequestPost as clarificationsPost 
 import { onRequestPut as clarificationPut, onRequestDelete as clarificationDelete } from "./functions/api/clarifications/[id].js";
 import { onRequestGet as exceptionsGet, onRequestPost as exceptionsPost } from "./functions/api/exceptions/index.js";
 import { onRequestPut as exceptionPut, onRequestDelete as exceptionDelete } from "./functions/api/exceptions/[id].js";
+import { onRequestGet as tendersGet, onRequestPost as tendersPost } from "./functions/api/tenders/index.js";
+import { onRequestDelete as tenderDelete } from "./functions/api/tenders/tender.js";
+import { onRequestPost as criteriaPost } from "./functions/api/tenders/criteria.js";
+import { onRequestPost as biddersPost } from "./functions/api/tenders/bidders.js";
+import { onRequestPut as bidderCompliancePut } from "./functions/api/tenders/bidderCompliance.js";
+import { onRequestPut as bidderQhsePut } from "./functions/api/tenders/bidderQhse.js";
+import { onRequestPut as bidderFinancialPut } from "./functions/api/tenders/bidderFinancial.js";
+import { onRequestPut as bidderIcvPut } from "./functions/api/tenders/bidderIcv.js";
+import { onRequestGet as validityEntriesGet, onRequestPost as validityEntriesPost } from "./functions/api/validityEntries/index.js";
+import { onRequestDelete as validityEntryDelete } from "./functions/api/validityEntries/[id].js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -69,6 +79,28 @@ export default {
       if (pathname === "/api/contracts" && method === "POST") return contractsPost(base);
       const contractMatch = pathname.match(/^\/api\/contracts\/([^/]+)$/);
       if (contractMatch && method === "PUT") return contractPut({ ...base, params: { id: contractMatch[1] } });
+
+      if (pathname === "/api/tenders" && method === "GET") return tendersGet(base);
+      if (pathname === "/api/tenders" && method === "POST") return tendersPost(base);
+      const tenderCriteriaMatch = pathname.match(/^\/api\/tenders\/([^/]+)\/criteria$/);
+      if (tenderCriteriaMatch && method === "POST") return criteriaPost({ ...base, params: { tenderNumber: tenderCriteriaMatch[1] } });
+      const tenderBiddersMatch = pathname.match(/^\/api\/tenders\/([^/]+)\/bidders$/);
+      if (tenderBiddersMatch && method === "POST") return biddersPost({ ...base, params: { tenderNumber: tenderBiddersMatch[1] } });
+      const bidderComplianceMatch = pathname.match(/^\/api\/tenders\/([^/]+)\/bidders\/([^/]+)\/compliance$/);
+      if (bidderComplianceMatch && method === "PUT") return bidderCompliancePut({ ...base, params: { tenderNumber: bidderComplianceMatch[1], bidderId: bidderComplianceMatch[2] } });
+      const bidderQhseMatch = pathname.match(/^\/api\/tenders\/([^/]+)\/bidders\/([^/]+)\/qhse$/);
+      if (bidderQhseMatch && method === "PUT") return bidderQhsePut({ ...base, params: { tenderNumber: bidderQhseMatch[1], bidderId: bidderQhseMatch[2] } });
+      const bidderFinancialMatch = pathname.match(/^\/api\/tenders\/([^/]+)\/bidders\/([^/]+)\/financial$/);
+      if (bidderFinancialMatch && method === "PUT") return bidderFinancialPut({ ...base, params: { tenderNumber: bidderFinancialMatch[1], bidderId: bidderFinancialMatch[2] } });
+      const bidderIcvMatch = pathname.match(/^\/api\/tenders\/([^/]+)\/bidders\/([^/]+)\/icv$/);
+      if (bidderIcvMatch && method === "PUT") return bidderIcvPut({ ...base, params: { tenderNumber: bidderIcvMatch[1], bidderId: bidderIcvMatch[2] } });
+      const tenderMatch = pathname.match(/^\/api\/tenders\/([^/]+)$/);
+      if (tenderMatch && method === "DELETE") return tenderDelete({ ...base, params: { tenderNumber: tenderMatch[1] } });
+
+      if (pathname === "/api/validityEntries" && method === "GET") return validityEntriesGet(base);
+      if (pathname === "/api/validityEntries" && method === "POST") return validityEntriesPost(base);
+      const validityEntryMatch = pathname.match(/^\/api\/validityEntries\/([^/]+)$/);
+      if (validityEntryMatch && method === "DELETE") return validityEntryDelete({ ...base, params: { id: validityEntryMatch[1] } });
 
       return new Response("Not found", { status: 404 });
     } catch (err) {

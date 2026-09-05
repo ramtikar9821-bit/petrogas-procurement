@@ -32,7 +32,11 @@ export const PERMISSIONS = {
   tenders: ["Procurement Officer", "Contract Engineer"],
   contracts: ["Procurement Officer", "Contract Owner"],
   exceptions: ["Contract Engineer", "Procurement Officer", "Legal Team Member"],
-  exceptionsDecide: ["Legal Team Member", "HOD Legal", "Category Manager", "DOA Approver"]
+  exceptionsDecide: ["Legal Team Member", "HOD Legal", "Category Manager", "DOA Approver"],
+  tendersCompliance: ["Procurement Officer", "SME"],
+  tendersQHSE: ["HSE Advisor"],
+  tendersFinancial: ["SME", "Finance Evaluator"],
+  tendersICV: ["ICV Coordinator"]
 };
 
 // Legal is the only side that can object to a fast-track reuse, act as the

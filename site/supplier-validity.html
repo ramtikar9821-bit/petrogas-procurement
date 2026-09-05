@@ -63,23 +63,10 @@
 
 <script src="assets/app.js"></script>
 <script>
-const MANUAL_KEY = "pgp_manual_validity";
 let TENDERS = [];
 let VENDORS = [];
 let REGISTER = [];
-
-// Standalone validity entries not tied to a Tender Evaluation record — e.g. a
-// certification a vendor already holds. Kept separate from TENDERS (rather
-// than faked as a synthetic tender/bidder) so it never shows up as a phantom
-// entry in Tender Evaluation's own tender list.
-function loadManualEntries() {
-  try { return JSON.parse(localStorage.getItem(MANUAL_KEY) || "[]"); }
-  catch { return []; }
-}
-
-function saveManualEntries(list) {
-  localStorage.setItem(MANUAL_KEY, JSON.stringify(list));
-}
+let MANUAL_ENTRIES = [];
 
 function statusBadge(entry) {
   if (entry.status === "Expired") return `<span class="badge red">Expired</span>`;
@@ -111,9 +98,9 @@ function renderTable(items) {
 
 // Admin-only. Manually-added entries just get removed from their own list;
 // tender-derived ones have no separate row to delete, so this clears the
-// finalized QHSE/Financial block on the underlying bidder record instead
-// (Tenders is still on the localStorage prototype path, not an API call).
-function deleteEntry(index) {
+// finalized QHSE/Financial block on the underlying bidder record instead, via
+// the same tenders API used by Tender Evaluation.
+async function deleteEntry(index) {
   const items = REGISTER.filter(e =>
     e.vendor_name.toLowerCase().includes(document.getElementById("searchBox").value.toLowerCase()) ||
     e.cr_number.toLowerCase().includes(document.getElementById("searchBox").value.toLowerCase())
@@ -123,7 +110,13 @@ function deleteEntry(index) {
   if (!confirm(`Delete the finalized ${entry.assessment_type} assessment for ${entry.vendor_name}? This can't be undone.`)) return;
 
   if (entry.manual_id) {
-    saveManualEntries(loadManualEntries().filter(m => m.manual_id !== entry.manual_id));
+    try {
+      await PGP.apiDelete("validityEntries", entry.manual_id);
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    MANUAL_ENTRIES = MANUAL_ENTRIES.filter(m => m.entry_id !== entry.manual_id);
     refreshRegister();
     return;
   }
@@ -131,11 +124,15 @@ function deleteEntry(index) {
   const type = entry.assessment_type === "QHSE" ? "qhse" : "financial";
   const t = TENDERS.find(x => x.tender_number === entry.source_tender_number);
   const b = t && (t.bidders || []).find(x => x.vendor_id === entry.vendor_id);
-  if (b && b[type]) {
-    b[type].finalized_at = null;
-    b[type].validity_end_date = null;
+  if (!b) { refreshRegister(); return; }
+  try {
+    await PGP.apiUpdate(`tenders/${t.tender_number}/bidders/${b.bidder_id}`, type, { clearFinalized: true });
+  } catch (err) {
+    alert(err.message);
+    return;
   }
-  PGP.saveFullList("pgp_tenders_full", TENDERS);
+  b[type].finalized_at = null;
+  b[type].validity_end_date = null;
   refreshRegister();
 }
 
@@ -201,11 +198,11 @@ async function saveConfig() {
 }
 
 function assembleManualEntries() {
-  return loadManualEntries().map(m => {
+  return MANUAL_ENTRIES.map(m => {
     const vendor = VENDORS.find(v => v.vendor_id === m.vendor_id);
     const days = PGP.daysUntil(m.validity_end_date);
     return {
-      manual_id: m.manual_id,
+      manual_id: m.entry_id,
       vendor_id: m.vendor_id,
       assessment_type: m.assessment_type,
       source_tender_number: "Manual Entry",
@@ -225,14 +222,22 @@ function refreshRegister() {
   applySearch();
 }
 
+async function loadManualEntries() {
+  const res = await fetch("/api/validityEntries", { credentials: "same-origin" });
+  if (!res.ok) return [];
+  return (await res.json()).entries;
+}
+
 async function init() {
   await PGP.initConfig();
-  const [tendersData, vendorsData] = await Promise.all([
-    PGP.loadFullList("data/tenders.json", "pgp_tenders_full"),
-    PGP.loadVendors()
+  const [tendersData, vendorsData, manualData] = await Promise.all([
+    PGP.apiList("tenders"),
+    PGP.loadVendors(),
+    loadManualEntries()
   ]);
   TENDERS = tendersData;
   VENDORS = vendorsData;
+  MANUAL_ENTRIES = manualData;
   renderConfig();
   refreshRegister();
 
@@ -240,18 +245,22 @@ async function init() {
   document.getElementById("assessmentType").addEventListener("change", updateValidityEndDate);
   document.getElementById("finalizedAt").addEventListener("change", updateValidityEndDate);
 
-  document.getElementById("addForm").addEventListener("submit", (e) => {
+  document.getElementById("addForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const manual = loadManualEntries();
-    manual.push({
-      manual_id: "MAN-" + Date.now().toString(36).toUpperCase(),
-      vendor_id: fd.get("vendor_id"),
-      assessment_type: fd.get("assessment_type"),
-      finalized_at: fd.get("finalized_at"),
-      validity_end_date: fd.get("validity_end_date")
-    });
-    saveManualEntries(manual);
+    let created;
+    try {
+      created = await PGP.apiCreate("validityEntries", {
+        vendor_id: fd.get("vendor_id"),
+        assessment_type: fd.get("assessment_type"),
+        finalized_at: fd.get("finalized_at"),
+        validity_end_date: fd.get("validity_end_date")
+      });
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    MANUAL_ENTRIES.push(created);
     refreshRegister();
     PGP.closeModal("addModal");
     e.target.reset();
