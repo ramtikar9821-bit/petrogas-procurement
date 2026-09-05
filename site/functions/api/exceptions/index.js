@@ -1,6 +1,5 @@
 import { getSessionUser, json } from "../../_lib/auth.js";
-import { requireRole, newId } from "../../_lib/db.js";
-import { PERMISSIONS } from "../../_lib/roles.js";
+import { newId } from "../../_lib/db.js";
 
 function assemble(rows) {
   return rows.map(e => ({
@@ -71,10 +70,15 @@ export async function onRequestGet({ request, env }) {
 
 const FAST_TRACK_WINDOW_DAYS = 2;
 
+// Logging a new exception is open to any authenticated user — same
+// reasoning as Clarification: roles are Admin-configurable now, so gating
+// creation on specific hardcoded role names is fragile (and broke once
+// already when Procurement Officer was deleted). The decide/negotiate/
+// consent actions in [id].js stay role-gated since those really are
+// segregation-of-duties steps, not just a logging permission.
 export async function onRequestPost({ request, env }) {
   const user = await getSessionUser(request, env);
-  const denied = requireRole(user, PERMISSIONS.exceptions);
-  if (denied) return denied;
+  if (!user) return json({ error: "Not authenticated." }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
   const {

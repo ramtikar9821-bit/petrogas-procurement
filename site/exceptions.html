@@ -443,8 +443,6 @@ function usePrecedent(precedentId) {
 }
 
 async function init() {
-  PGP.guardAddButton("exceptions", document.getElementById("addBtn"));
-
   const [exceptionsData, tendersData] = await Promise.all([
     PGP.apiList("exceptions"),
     PGP.apiList("tenders")
