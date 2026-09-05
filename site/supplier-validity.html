@@ -22,6 +22,7 @@
 
   <div class="toolbar">
     <input type="text" id="searchBox" placeholder="Search vendor or CR number...">
+    <button id="addBtn" onclick="openAddModal()">+ Add Validity Entry</button>
   </div>
 
   <div class="card">
@@ -34,11 +35,51 @@
   </div>
 </main>
 
+<!-- Manually add a validity entry (e.g. a certification held outside a tender) -->
+<div class="modal-backdrop" id="addModal">
+  <div class="modal">
+    <h2>Add Validity Entry</h2>
+    <form id="addForm">
+      <div class="form-row">
+        <label>Vendor</label>
+        <select name="vendor_id" id="vendorSelect" required></select>
+      </div>
+      <div class="form-row">
+        <label>Assessment Type</label>
+        <select name="assessment_type" id="assessmentType" required>
+          <option value="QHSE">QHSE</option>
+          <option value="Financial">Financial</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Finalized Date</label><input type="date" name="finalized_at" id="finalizedAt" required></div>
+      <div class="form-row"><label>Valid Until</label><input type="date" name="validity_end_date" id="validityEndDate" required></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="PGP.closeModal('addModal')">Cancel</button>
+        <button type="submit">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="assets/app.js"></script>
 <script>
+const MANUAL_KEY = "pgp_manual_validity";
 let TENDERS = [];
 let VENDORS = [];
 let REGISTER = [];
+
+// Standalone validity entries not tied to a Tender Evaluation record — e.g. a
+// certification a vendor already holds. Kept separate from TENDERS (rather
+// than faked as a synthetic tender/bidder) so it never shows up as a phantom
+// entry in Tender Evaluation's own tender list.
+function loadManualEntries() {
+  try { return JSON.parse(localStorage.getItem(MANUAL_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveManualEntries(list) {
+  localStorage.setItem(MANUAL_KEY, JSON.stringify(list));
+}
 
 function statusBadge(entry) {
   if (entry.status === "Expired") return `<span class="badge red">Expired</span>`;
@@ -51,7 +92,7 @@ function renderTable(items) {
   const tbody = document.querySelector("#registerTable tbody");
   const isAdmin = PGP.getRole() === "Admin";
   if (items.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No finalized QHSE/Financial assessments yet — finalize one from a bidder's evaluation tab in Tender Evaluation.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No finalized QHSE/Financial assessments yet — finalize one from a bidder's evaluation tab in Tender Evaluation, or add one manually above.</td></tr>`;
     return;
   }
   tbody.innerHTML = items.map((e, i) => `
@@ -68,10 +109,10 @@ function renderTable(items) {
   `).join("");
 }
 
-// Admin-only: clears the finalized QHSE/Financial assessment on the underlying
-// bidder record (there's no separate row to delete — this register is derived
-// from Tender Evaluation data), so the entry drops out of the register. Not an
-// API call — Tenders is still on the localStorage prototype path.
+// Admin-only. Manually-added entries just get removed from their own list;
+// tender-derived ones have no separate row to delete, so this clears the
+// finalized QHSE/Financial block on the underlying bidder record instead
+// (Tenders is still on the localStorage prototype path, not an API call).
 function deleteEntry(index) {
   const items = REGISTER.filter(e =>
     e.vendor_name.toLowerCase().includes(document.getElementById("searchBox").value.toLowerCase()) ||
@@ -80,6 +121,12 @@ function deleteEntry(index) {
   const entry = items[index];
   if (!entry) return;
   if (!confirm(`Delete the finalized ${entry.assessment_type} assessment for ${entry.vendor_name}? This can't be undone.`)) return;
+
+  if (entry.manual_id) {
+    saveManualEntries(loadManualEntries().filter(m => m.manual_id !== entry.manual_id));
+    refreshRegister();
+    return;
+  }
 
   const type = entry.assessment_type === "QHSE" ? "qhse" : "financial";
   const t = TENDERS.find(x => x.tender_number === entry.source_tender_number);
@@ -90,6 +137,23 @@ function deleteEntry(index) {
   }
   PGP.saveFullList("pgp_tenders_full", TENDERS);
   refreshRegister();
+}
+
+function updateValidityEndDate() {
+  const cfg = PGP.getValidityConfig();
+  const type = document.getElementById("assessmentType").value;
+  const finalizedAt = document.getElementById("finalizedAt").value;
+  const months = type === "QHSE" ? cfg.qhse_validity_months : cfg.financial_validity_months;
+  document.getElementById("validityEndDate").value = PGP.addMonths(finalizedAt, months);
+}
+
+function openAddModal() {
+  document.getElementById("vendorSelect").innerHTML = VENDORS
+    .map(v => `<option value="${v.vendor_id}">${PGP.escapeHtml(v.vendor_name)} (${PGP.escapeHtml(v.cr_number)})</option>`)
+    .join("");
+  document.getElementById("finalizedAt").value = new Date().toISOString().slice(0, 10);
+  updateValidityEndDate();
+  PGP.openModal("addModal");
 }
 
 function applySearch() {
@@ -136,8 +200,28 @@ async function saveConfig() {
   renderConfig();
 }
 
+function assembleManualEntries() {
+  return loadManualEntries().map(m => {
+    const vendor = VENDORS.find(v => v.vendor_id === m.vendor_id);
+    const days = PGP.daysUntil(m.validity_end_date);
+    return {
+      manual_id: m.manual_id,
+      vendor_id: m.vendor_id,
+      assessment_type: m.assessment_type,
+      source_tender_number: "Manual Entry",
+      finalized_at: m.finalized_at,
+      validity_end_date: m.validity_end_date,
+      vendor_name: vendor ? vendor.vendor_name : m.vendor_id,
+      cr_number: vendor ? vendor.cr_number : "—",
+      status: days < 0 ? "Expired" : "Valid",
+      days_left: days
+    };
+  });
+}
+
 function refreshRegister() {
-  REGISTER = PGP.computeSupplierValidityRegister(TENDERS, VENDORS, PGP.getValidityConfig());
+  const tenderDerived = PGP.computeSupplierValidityRegister(TENDERS, VENDORS, PGP.getValidityConfig());
+  REGISTER = [...tenderDerived, ...assembleManualEntries()].sort((a, b) => a.days_left - b.days_left);
   applySearch();
 }
 
@@ -153,6 +237,25 @@ async function init() {
   refreshRegister();
 
   document.getElementById("searchBox").addEventListener("input", applySearch);
+  document.getElementById("assessmentType").addEventListener("change", updateValidityEndDate);
+  document.getElementById("finalizedAt").addEventListener("change", updateValidityEndDate);
+
+  document.getElementById("addForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const manual = loadManualEntries();
+    manual.push({
+      manual_id: "MAN-" + Date.now().toString(36).toUpperCase(),
+      vendor_id: fd.get("vendor_id"),
+      assessment_type: fd.get("assessment_type"),
+      finalized_at: fd.get("finalized_at"),
+      validity_end_date: fd.get("validity_end_date")
+    });
+    saveManualEntries(manual);
+    refreshRegister();
+    PGP.closeModal("addModal");
+    e.target.reset();
+  });
 }
 PGP.initAuth().then(() => {
   PGP.renderChrome("supplier-validity.html");
