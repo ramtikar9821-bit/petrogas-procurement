@@ -1,8 +1,22 @@
-/* Shared helpers for the Petrogas Procurement & Contract Governance prototype.
-   Static-site only: JSON files are seed data; anything added via the "Add" forms
-   is merged in and persisted to localStorage in the browser (no backend). */
+/* Shared helpers for the Petrogas Procurement & Contract Governance platform.
+   All module data lives in D1 via Cloudflare Pages Functions (functions/api/*);
+   this file is the shared frontend layer every page includes. */
 
 const PGP = (() => {
+  // Minimal 20x20 stroke icons (currentColor), keyed by nav href — kept as raw
+  // markup here rather than an icon font/library so the sidebar has no extra
+  // network dependency.
+  const NAV_ICONS = {
+    "index.html": '<path d="M3 10.5 10 4l7 6.5"/><path d="M5 9v7h10V9"/>',
+    "tender-evaluation.html": '<rect x="5" y="3.5" width="10" height="13" rx="1.5"/><path d="M8 3.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v.5"/><path d="m7.5 10 1.7 1.7L12.5 8"/>',
+    "scope-clarification.html": '<path d="M3 4.5h14v8.5H8l-3.5 3V13H3z"/><path d="M6.5 7.5h7M6.5 10h4.5"/>',
+    "exceptions.html": '<path d="M10 2.5 16 5v4.5c0 4-2.5 6.7-6 8-3.5-1.3-6-4-6-8V5z"/><path d="m7.5 9.6 1.8 1.8 3.2-3.8"/>',
+    "contracts.html": '<path d="M6 2.5h6l3 3V17H6z"/><path d="M12 2.5V6h3M8 9.5h4M8 12h4M8 14.5h2.5"/>',
+    "supplier-validity.html": '<path d="M10 2.5 16 5v4.5c0 4-2.5 6.7-6 8-3.5-1.3-6-4-6-8V5z"/><circle cx="10" cy="8.3" r="1.6"/><path d="M7.3 12c.6-1.1 1.6-1.7 2.7-1.7s2.1.6 2.7 1.7"/>',
+    "templates.html": '<path d="m10 2.5 7 3.6-7 3.6-7-3.6z"/><path d="m3 10.1 7 3.6 7-3.6M3 13.7l7 3.6 7-3.6"/>',
+    "admin-users.html": '<circle cx="7.2" cy="7" r="2.6"/><path d="M2.5 16c.7-2.6 2.4-4 4.7-4s4 1.4 4.7 4"/><circle cx="14" cy="6.5" r="2"/><path d="M12.8 8.7c1.7.3 2.9 1.6 3.4 3.6"/>'
+  };
+
   const NAV_ITEMS = [
     { href: "index.html", label: "Dashboard" },
     { href: "tender-evaluation.html", label: "Tender Evaluation" },
@@ -124,6 +138,10 @@ const PGP = (() => {
     return currentUser;
   }
 
+  function initials(name) {
+    return (name || "").trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("") || "?";
+  }
+
   function renderChrome(activeHref) {
     const header = document.createElement("header");
     header.className = "sidebar";
@@ -131,14 +149,23 @@ const PGP = (() => {
       ? [...NAV_ITEMS, { href: "admin-users.html", label: "Manage Users" }]
       : NAV_ITEMS;
     header.innerHTML = `
-      <div class="brand"><span class="dot"></span> Petrogas Procurement &amp; Contract Governance</div>
+      <div class="brand"><span class="brand-mark">PG</span> <span>Petrogas Procurement</span></div>
       <nav class="tabs">
-        ${navItems.map(i => `<a href="${i.href}" class="${i.href === activeHref ? 'active' : ''}">${i.label}</a>`).join("")}
+        ${navItems.map(i => `
+          <a href="${i.href}" class="${i.href === activeHref ? 'active' : ''}">
+            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${NAV_ICONS[i.href] || ''}</svg>
+            <span>${i.label}</span>
+          </a>
+        `).join("")}
       </nav>
       <div class="role-switch">
-        <label>Logged in as</label>
-        <div class="current-user">${escapeHtml(currentUser?.name || "")}</div>
-        <div class="current-role">${escapeHtml(currentUser?.role || "")}</div>
+        <div class="user-chip">
+          <span class="avatar">${escapeHtml(initials(currentUser?.name))}</span>
+          <div class="user-chip-text">
+            <div class="current-user">${escapeHtml(currentUser?.name || "")}</div>
+            <div class="current-role">${escapeHtml(currentUser?.role || "")}</div>
+          </div>
+        </div>
         <button type="button" class="secondary" id="logoutBtn">Log out</button>
       </div>
     `;

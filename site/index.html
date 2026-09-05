@@ -14,8 +14,6 @@
     <p>Overview across all five modules. Click a card to open the module.</p>
   </div>
 
-  <div class="note-banner">Module data below is a prototype (JSON seed data + browser-local additions) — logins and roles are real, via Cloudflare Pages Functions + D1.</div>
-
   <div class="grid-cards" id="statCards"></div>
 
   <div class="card" id="myClarificationsCard" hidden>
@@ -42,7 +40,7 @@ async function init() {
   const [tenders, clarifications, exceptions, contracts, templates, vendors] = await Promise.all([
     PGP.apiList("tenders"),
     PGP.apiList("clarifications"),
-    PGP.loadFullList("data/exceptions.json", "pgp_exceptions_full"),
+    PGP.apiList("exceptions"),
     PGP.apiList("contracts"),
     PGP.apiList("templates"),
     PGP.loadVendors(),
@@ -74,6 +72,15 @@ async function init() {
   const validityRegister = PGP.computeSupplierValidityRegister(tenders, vendors, PGP.getValidityConfig());
   const expiredAssessments = validityRegister.filter(e => e.status === "Expired").length;
 
+  const STAT_ICONS = {
+    "tender-evaluation.html": '<rect x="5" y="3.5" width="10" height="13" rx="1.5"/><path d="m7.5 10 1.7 1.7L12.5 8"/>',
+    "scope-clarification.html": '<path d="M3 4.5h14v8.5H8l-3.5 3V13H3z"/><path d="M6.5 7.5h7M6.5 10h4.5"/>',
+    "exceptions.html": '<path d="M10 2.5 16 5v4.5c0 4-2.5 6.7-6 8-3.5-1.3-6-4-6-8V5z"/><path d="m7.5 9.6 1.8 1.8 3.2-3.8"/>',
+    "contracts.html": '<path d="M6 2.5h6l3 3V17H6z"/><path d="M12 2.5V6h3M8 9.5h4M8 12h4"/>',
+    "supplier-validity.html": '<path d="M10 2.5 16 5v4.5c0 4-2.5 6.7-6 8-3.5-1.3-6-4-6-8V5z"/><circle cx="10" cy="8.3" r="1.6"/><path d="M7.3 12c.6-1.1 1.6-1.7 2.7-1.7s2.1.6 2.7 1.7"/>',
+    "templates.html": '<path d="m10 2.5 7 3.6-7 3.6-7-3.6z"/><path d="m3 10.1 7 3.6 7-3.6"/>'
+  };
+
   const cards = [
     { href: "tender-evaluation.html", label: "Tenders in Evaluation", value: tenders.filter(t => t.status !== "Awarded").length, sub: `${tenders.length} total tenders` },
     { href: "scope-clarification.html", label: "Open Clarifications", value: openClarifications, sub: `${overdueClarifications} overdue (SLA breach)` },
@@ -85,6 +92,7 @@ async function init() {
 
   document.getElementById("statCards").innerHTML = cards.map(c => `
     <a class="stat-card" href="${c.href}">
+      <div class="stat-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[c.href] || ''}</svg></div>
       <div class="label">${c.label}</div>
       <div class="value">${c.value}</div>
       <div class="sub">${c.sub}</div>
