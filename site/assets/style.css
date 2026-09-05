@@ -318,18 +318,18 @@ main {
 
 /* ================= Tables ================= */
 
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: auto; }
 
 thead th {
   text-align: left; background: transparent; color: var(--text-faint);
-  padding: 0 14px 10px; border-bottom: 1px solid var(--border);
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
   font-weight: 700; font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.05em; white-space: nowrap;
 }
 
 tbody td {
-  padding: 14px; border-bottom: 1px solid var(--border);
-  vertical-align: top; overflow-wrap: anywhere;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  vertical-align: top; overflow-wrap: break-word; word-break: normal;
 }
 
 tbody tr:last-child td { border-bottom: none; }
