@@ -151,7 +151,7 @@ const PGP = (() => {
 
     const footer = document.createElement("footer");
     footer.className = "site-footer";
-    footer.textContent = "Prototype build — for review only. Not connected to a live ERP.";
+    footer.textContent = "Petrogas Procurement & Contract Governance — internal system.";
     document.body.appendChild(footer);
   }
 
